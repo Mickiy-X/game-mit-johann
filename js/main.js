@@ -15,6 +15,9 @@ import {
 import { generateOrder, generateOrders, applySaleToOrder, orderRequirementText } from './orders.js';
 import { NIGHT_MODS, pickNightMod, nightTuning } from './nights.js';
 import { LORE_FRAGMENTS } from './lore.js';
+import {
+  createDayEvent, eventPullMul, eventQualityMul, eventSellMul, eventShortsMachine
+} from './events.js';
 
 /* ============================================================ */
 /* Setup                                                        */
@@ -244,6 +247,10 @@ function newState() {
     orders: [],
     orderFocus: 0,
     ordersDone: 0,
+    event: null,
+    eventTimer: 0,
+    eventCount: 0,
+    lastEventKind: null,
     nightMod: null,
     lastNightMod: null,
     pickups: [],
@@ -667,6 +674,10 @@ function startGame(continueGame) {
     state.orders = [];
     state.orderFocus = 0;
     state.ordersDone = 0;
+    state.event = null;
+    state.eventTimer = 0;
+    state.eventCount = 0;
+    state.lastEventKind = null;
     state.nightMod = null;
     state.lastNightMod = null;
     state.pickups = [];
@@ -711,6 +722,10 @@ function beginDay(resetEarnings) {
   state.scareCooldown = 70 + Math.random() * 25;
   state.insideSafe = false;
   state.zoneWarned = {};
+  state.event = null;
+  state.eventCount = 0;
+  state.lastEventKind = null;
+  state.eventTimer = state.day >= 2 ? 15 + Math.random() * 13 : 0;
   state.nightMod = null;
   stormTimer = 0;
   blackoutTimer = 0;
@@ -1024,6 +1039,10 @@ function startGuest() {
   state.orders = [];
   state.orderFocus = 0;
   state.ordersDone = 0;
+  state.event = null;
+  state.eventTimer = 0;
+  state.eventCount = 0;
+  state.lastEventKind = null;
   state.nightMod = null;
   state.lastNightMod = null;
   state.pickups = [];
@@ -1186,7 +1205,7 @@ function updateRemoteSim(dt) {
         remote.pulling = false;
         remote.pullZone = null;
       } else {
-        const rate = PULL_BASE_RATE * z.rate * state.stats.pullMul;
+        const rate = PULL_BASE_RATE * z.rate * state.stats.pullMul * eventPullMul(state.event, z.id);
         gainYarn(z, rate * dt);
       }
     }
@@ -1228,6 +1247,7 @@ function buildSnapshot() {
     orders: state.orders,
     orderFocus: state.orderFocus,
     ordersDone: state.ordersDone,
+    event: state.event,
     pickups: state.pickups.map((p) => ({ x: p.x, z: p.z, type: p.type, reward: p.reward, taken: p.taken })),
     upgrades: state.upgrades,
     lore: state.lore,
@@ -1337,7 +1357,7 @@ function sellAllFor(who) {
   if (!who.carrying.length) return;
   const spools = who.carrying.slice();
   const total = spools.reduce((s, x) => s + x.value, 0);
-  const payout = Math.round(total * state.stats.sellMul);
+  const payout = Math.round(total * state.stats.sellMul * eventSellMul(state.event));
   const count = spools.length;
   who.carrying.length = 0;
   if (who === player) player.updateCarryDisplay();
@@ -1417,6 +1437,7 @@ function applyGuestSnapshot(s) {
   const prevDoorClosed = state.doorClosed;
   const prevDoorBroken = state.doorBroken;
   const prevLadder = state.upgrades.ladder;
+  const prevEventId = state.event ? state.event.id : null;
 
   state.phase = s.phase;
   state.phaseTimeLeft = s.phaseTimeLeft;
@@ -1439,6 +1460,7 @@ function applyGuestSnapshot(s) {
   state.orders = Array.isArray(s.orders) ? s.orders : [];
   state.orderFocus = s.orderFocus || 0;
   state.ordersDone = s.ordersDone;
+  state.event = s.event || null;
   state.upgrades = s.upgrades || state.upgrades;
   state.stats = getStats(state.upgrades);
   state.lore = s.lore;
@@ -1497,8 +1519,9 @@ function applyGuestSnapshot(s) {
     world.setLadderVisible(s.upgrades.ladder > 0);
   }
 
-  const running = s.upgrades.auto > 0 && s.phase === 'day' && !s.scare && !s.machineSabotaged;
-  const spinSig = `${s.upgrades.auto}|${running}|${s.machineSabotaged}`;
+  const shorted = eventShortsMachine(s.event);
+  const running = s.upgrades.auto > 0 && s.phase === 'day' && !s.scare && !s.machineSabotaged && !shorted;
+  const spinSig = `${s.upgrades.auto}|${running}|${s.machineSabotaged}|${shorted ? 1 : 0}`;
   if (spinSig !== lastSpinnerSig) {
     lastSpinnerSig = spinSig;
     world.setSpinnerState(s.upgrades.auto > 0, running, s.machineSabotaged);
@@ -1519,6 +1542,12 @@ function applyGuestSnapshot(s) {
     ui.hideWin();
     state.mode = 'playing';
     resetGuestDay();
+  }
+
+  if (state.event && state.event.id !== prevEventId) {
+    ui.toast(`${state.event.name}: ${state.event.desc}`, state.event.tone === 'good' ? 'gold' : 'danger', 7200);
+    if (state.event.tone === 'good') audio.coin();
+    else audio.creakLong();
   }
 
   renderGuestShopIfChanged();
@@ -1718,7 +1747,7 @@ function updateGuestInteractions(dt) {
           zonePulling = true;
           pull.active = true;
           pull.zone = z;
-          pull.rate = PULL_BASE_RATE * z.rate * state.stats.pullMul;
+          pull.rate = PULL_BASE_RATE * z.rate * state.stats.pullMul * eventPullMul(state.event, z.id);
           pull.tension += dt * 27 * z.risk * state.stats.tensionMul;
           if (pull.tension >= 100) {
             pull.tension = 0;
@@ -1825,6 +1854,8 @@ function updateGuestInteractions(dt) {
               resetHold();
             }
           }
+        } else if (eventShortsMachine(state.event)) {
+          setPrompt({ text: 'Kurzschluss', sub: 'Der Spinner setzt kurz aus' });
         } else {
           const running = state.phase === 'day' && !state.scare;
           setPrompt({
@@ -1934,6 +1965,8 @@ function startDusk() {
   state.phaseTimeLeft = DUSK_LENGTH + state.stats.alarmExtra;
   state.scare = false;
   state.scareTime = 0;
+  state.event = null;
+  state.eventTimer = 0;
   state.nightMod = pickNightMod(state.day, state.stage, state.lastNightMod);
   state.lastNightMod = state.nightMod;
   world.setPhase('dusk');
@@ -2034,6 +2067,10 @@ function endNight() {
   document.body.classList.remove('night-blood');
   state.orders = [];
   state.orderFocus = 0;
+  state.event = null;
+  state.eventTimer = 0;
+  state.eventCount = 0;
+  state.lastEventKind = null;
   state.pickups = [];
   for (let i = 0; i < world.pickups.length; i++) world.setPickupVisible(i, false);
   for (const z of WORLD.zones) {
@@ -2183,7 +2220,7 @@ function endScare() {
 /* ============================================================ */
 function rollQuality(zone) {
   const w = zone.weights;
-  const mul = state.stats.rareMul;
+  const mul = state.stats.rareMul * eventQualityMul(state.event, zone.id);
   const ww = w.white;
   const wr = w.red * mul;
   const wb = w.black * mul;
@@ -2282,6 +2319,121 @@ function updateStage() {
     player.addShake(0.09, 0.6);
     if (st >= 4) world.lightsOut = 2.5;
   }
+}
+
+/* ============================================================ */
+/* Tagesereignisse                                              */
+/* ============================================================ */
+function maxEventsForDay() {
+  return state.day >= 4 ? 2 : 1;
+}
+
+function updateDayEvents(dt) {
+  if (state.day < 2) return;
+
+  if (state.event) {
+    state.event.timeLeft -= dt;
+    if (state.event.timeLeft <= 0) endDayEvent();
+    return;
+  }
+
+  if (state.eventCount >= maxEventsForDay()) return;
+  state.eventTimer -= dt;
+  if (state.eventTimer > 0) return;
+  if (state.scare || state.phaseTimeLeft < 22) {
+    state.eventTimer = 5;
+    return;
+  }
+  startDayEvent();
+}
+
+function startDayEvent(forcedKind = null) {
+  const zones = WORLD.zones.map((z) => ({
+    id: z.id,
+    name: z.name,
+    remaining: state.zoneRemaining[z.id] || 0,
+    locked: !!z.requiresLadder && !state.stats.ladder
+  }));
+  const event = createDayEvent({
+    day: state.day,
+    stage: state.stage,
+    upgrades: state.upgrades,
+    bufferUnits: state.buffer.units,
+    pickupsLeft: state.pickups.filter((p) => p && !p.taken).length < world.pickups.length ? 1 : 0,
+    lastKind: state.lastEventKind,
+    forcedKind,
+    zones
+  });
+  if (!event) {
+    state.eventTimer = 10 + Math.random() * 8;
+    return;
+  }
+
+  state.event = event;
+  state.eventCount++;
+  state.lastEventKind = event.kind;
+  if (event.kind === 'moths') applyMoths(event);
+  if (event.kind === 'spool' && !spawnEventSpool()) {
+    addMoney(80);
+    event.effect = 'Kein Platz · + 80 €';
+    event.desc = 'Die Spule passt nirgends hin. Du findest stattdessen 80 €.';
+  }
+
+  ui.toast(`${event.name}: ${event.desc}`, event.tone === 'good' ? 'gold' : 'danger', 7200);
+  if (event.tone === 'good') audio.coin();
+  else audio.creakLong();
+  player.addShake(event.tone === 'good' ? 0.03 : 0.06, 0.35);
+  syncUI();
+}
+
+function endDayEvent() {
+  const event = state.event;
+  if (!event) return;
+  state.event = null;
+  state.eventTimer = 20 + Math.random() * 14;
+  ui.toast(`${event.name} ist vorbei.`, '', 3200);
+  syncUI();
+}
+
+function applyMoths(event) {
+  const lost = state.buffer.units * event.power;
+  if (lost < 0.5) {
+    event.effect = 'Noch kein Vorrat';
+    return;
+  }
+  state.buffer.units = Math.max(0, state.buffer.units - lost);
+  state.buffer.value *= 1 - event.power;
+  for (const k of ['white', 'red', 'black', 'gold']) {
+    state.buffer.counts[k] *= 1 - event.power;
+  }
+  event.effect = `${Math.round(lost)} Faden gefressen`;
+  event.desc = `Motten im Vorrat. ${Math.round(lost)} Faden sind weg.`;
+  player.addShake(0.05, 0.4);
+}
+
+function spawnEventSpool() {
+  const used = state.pickups.filter((p) => p && !p.taken);
+  const spots = PICKUP_SPOTS.filter((s) => spotFree(s.x, s.z, 1.15)
+    && !used.some((p) => Math.hypot(p.x - s.x, p.z - s.z) < 3.2));
+  if (!spots.length) return false;
+  const spot = spots[Math.floor(Math.random() * spots.length)];
+  const item = {
+    x: spot.x,
+    z: spot.z,
+    type: 'spool',
+    reward: Math.min(380, 110 + state.day * 18 + Math.round(Math.random() * 40)),
+    taken: false
+  };
+  let index = state.pickups.findIndex((p) => p && p.taken);
+  if (index < 0) {
+    if (state.pickups.length >= world.pickups.length) return false;
+    index = state.pickups.length;
+    state.pickups.push(item);
+  } else {
+    state.pickups[index] = item;
+  }
+  world.setPickupVisible(index, true, spot.x, spot.z);
+  return true;
 }
 
 /* ============================================================ */
@@ -2569,7 +2721,7 @@ function updateInteractions(dt) {
           zonePulling = true;
           pull.active = true;
           pull.zone = z;
-          pull.rate = PULL_BASE_RATE * z.rate * state.stats.pullMul;
+          pull.rate = PULL_BASE_RATE * z.rate * state.stats.pullMul * eventPullMul(state.event, z.id);
 
           pull.tension += dt * 27 * z.risk * state.stats.tensionMul;
           if (pull.tension >= 100) {
@@ -2664,6 +2816,8 @@ function updateInteractions(dt) {
           const p = handleHold(dt, 'repair', 1 / 2.2);
           setPrompt({ text: 'Maschine reparieren', sub: 'E halten', progress: p });
           if (p >= 1) repairSpinner();
+        } else if (eventShortsMachine(state.event)) {
+          setPrompt({ text: 'Kurzschluss', sub: 'Der Spinner setzt kurz aus' });
         } else {
           const running = state.phase === 'day' && !state.scare;
           setPrompt({
@@ -2736,7 +2890,8 @@ function sellAll() {
   if (!state.carried.length) return;
   const spools = state.carried.slice();
   const total = spools.reduce((s, x) => s + x.value, 0);
-  const payout = Math.round(total * state.stats.sellMul);
+  const sellMul = state.stats.sellMul * eventSellMul(state.event);
+  const payout = Math.round(total * sellMul);
   const count = spools.length;
   state.carried.length = 0;
   player.updateCarryDisplay();
@@ -2745,7 +2900,7 @@ function sellAll() {
   resetHold();
   audio.sale();
   audio.coin();
-  const haggled = payout > total ? ` (verhandelt, +${Math.round((state.stats.sellMul - 1) * 100)} %)` : '';
+  const haggled = payout > total ? ` (verhandelt, +${Math.round((sellMul - 1) * 100)} %)` : '';
   ui.toast(`${count} Spule${count > 1 ? 'n' : ''} verkauft: + ${formatMoney(payout)}${haggled}`, 'gold', 4800);
 }
 
@@ -2923,7 +3078,8 @@ function updateAuto(dt) {
   const running = state.upgrades.auto > 0
     && state.phase === 'day'
     && !state.scare
-    && !state.machineSabotaged;
+    && !state.machineSabotaged
+    && !eventShortsMachine(state.event);
   if (running) autoGain(state.stats.autoRate * dt);
   syncSpinner(running);
 }
@@ -3022,7 +3178,7 @@ function johannContext() {
     onJohannWind: () => {},
     onJohannSell: (value) => {
       if (value > 0) {
-        const payout = Math.round(value * state.stats.sellMul);
+        const payout = Math.round(value * state.stats.sellMul * eventSellMul(state.event));
         addMoney(payout);
         state.spoolsMade++;
         registerOrderSale([{ value, counts: null }]);
@@ -3198,6 +3354,11 @@ function updateGame(dt) {
   }
 
   if (state.mode === 'dawn' || state.mode === 'win') return;
+
+  if (!isGuest() && state.mode === 'playing' && state.phase === 'day'
+    && state.started && !session.localPaused && !session.shopOpen) {
+    updateDayEvents(dt);
+  }
 
   if (remote.active) updateRemoteSim(dt);
   updateScare(dt);
@@ -3486,14 +3647,15 @@ window.addEventListener('beforeunload', () => {
 const params = new URLSearchParams(location.search);
 if (params.has('debug')) {
   window.__zwirn = {
-    state, player, doll, johann, world, ui, audio, scene, camera, THREE, renderer,
+    state, player, doll, johann, world, WORLD, ui, audio, scene, camera, THREE, renderer,
     net, session, remote, buildSnapshot,
     startGame, beginDay, startDusk, startNight, endNight,
     updateGame, updateGuestGame, updateInteractions, catchPlayer, sellAll,
     finishWinding, gainYarn, buyUpgrade, saveGame, loadRun,
     syncUI, toggleDoor, openShop, closeShop, isProtected,
     collectPickup, spawnPickups, restorePickups, generateOrder, generateOrders, cycleOrderFocus,
-    applyGuestSnapshot, openGuestShop, closeGuestShop, dawnContinue
+    applyGuestSnapshot, openGuestShop, closeGuestShop, dawnContinue,
+    startDayEvent, endDayEvent, createDayEvent, eventPullMul, eventSellMul, eventQualityMul
   };
 }
 

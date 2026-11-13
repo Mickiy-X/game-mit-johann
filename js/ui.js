@@ -91,6 +91,12 @@ export class UI {
       nightBannerText: $('night-banner-text'),
       danger: $('danger-banner'),
       dangerText: $('danger-text'),
+      eventBanner: $('event-banner'),
+      eventTag: $('event-tag'),
+      eventName: $('event-name'),
+      eventEffect: $('event-effect'),
+      eventTime: $('event-time'),
+      eventFill: $('event-fill'),
       toasts: $('toasts'),
       aimHint: $('aim-hint'),
       hint: $('hud-hint'),
@@ -381,9 +387,30 @@ export class UI {
     this.el.machinePanel.classList.toggle('hidden', state.upgrades.auto === 0);
     if (state.upgrades.auto > 0) {
       const broken = state.machineSabotaged;
-      const running = state.phase === 'day' && !broken && !state.scare;
-      this.el.machineState.textContent = broken ? 'DEFEKT' : running ? 'LÄUFT' : 'AUS';
-      this.el.machineState.classList.toggle('broken', broken);
+      const shorted = state.phase === 'day' && state.event && state.event.kind === 'blackout';
+      const running = state.phase === 'day' && !broken && !shorted && !state.scare;
+      this.el.machineState.textContent = broken ? 'DEFEKT' : shorted ? 'STÖRUNG' : running ? 'LÄUFT' : 'AUS';
+      this.el.machineState.classList.toggle('broken', broken || shorted);
+    }
+
+    const ev = state.phase === 'day' && !state.scare ? state.event : null;
+    this.el.eventBanner.classList.toggle('hidden', !ev);
+    if (ev) {
+      this.el.eventTag.textContent = ev.tag;
+      this.el.eventName.textContent = ev.name;
+      this.el.eventEffect.textContent = ev.effect;
+      this.el.eventTime.textContent = `${Math.max(1, Math.ceil(ev.timeLeft))} s`;
+      const left = Math.max(0, Math.min(1, ev.timeLeft / Math.max(1, ev.duration)));
+      this.el.eventFill.style.width = `${left * 100}%`;
+      this.el.eventBanner.classList.toggle('hazard', ev.tone === 'hazard');
+      if (ev.id !== this._eventId) {
+        this._eventId = ev.id;
+        this.el.eventBanner.classList.remove('pop');
+        void this.el.eventBanner.offsetWidth;
+        this.el.eventBanner.classList.add('pop');
+      }
+    } else {
+      this._eventId = '';
     }
 
     const orders = Array.isArray(state.orders) ? state.orders : [];
