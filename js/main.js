@@ -686,6 +686,7 @@ function beginDay(resetEarnings) {
   state.zoneWarned = {};
   state.nightMod = null;
   stormTimer = 0;
+  blackoutTimer = 0;
   document.body.classList.remove('night-blood');
   if (resetEarnings) state.dayEarned = 0;
 
@@ -897,14 +898,7 @@ function openGuestLobby(code) {
   ui.showLobby({ code, isHost: false });
 }
 
-function startHostCoop() {
-  if (!isHost() || !session.peerConnected || session.started) return;
-  session.started = true;
-  session.localPaused = false;
-  session.shopOpen = false;
-  ui.hideLobby();
-  ui.setNetBadge(`KOOP · ${session.code}`);
-
+function prepareRemoteGuest() {
   remote.active = true;
   remote.position.copy(WORLD.spawn2);
   remote.yaw = 0;
@@ -921,7 +915,17 @@ function startHostCoop() {
   }
   guestAvatar.setPosition(remote.position.x, remote.position.z, 0);
   guestAvatar.setVisible(true);
+}
 
+function startHostCoop() {
+  if (!isHost() || !session.peerConnected || session.started) return;
+  session.started = true;
+  session.localPaused = false;
+  session.shopOpen = false;
+  ui.hideLobby();
+  ui.setNetBadge(`KOOP · ${session.code}`);
+
+  prepareRemoteGuest();
   sendToGuest({ t: 'start' });
   startGame(false);
   ui.toast('Koop-Schicht gestartet. Spieler 2 ist dabei.', '', 4600);
@@ -932,6 +936,10 @@ function startGuest() {
   session.started = true;
   session.localPaused = false;
   session.shopOpen = false;
+  lastSpinnerSig = '';
+  lastPickupSig = '';
+  lastShopSig = '';
+  lastCarrySig = '';
   ui.hideLobby();
   ui.setNetBadge(`KOOP · ${session.code}`);
 
@@ -1021,13 +1029,20 @@ function handleServerMessage(type, msg) {
     case 'joined':
       openGuestLobby(msg.code);
       break;
-    case 'peer':
-      if (isHost()) {
-        session.peerConnected = !!msg.joined;
-        ui.updateLobby({ isHost: true, guestConnected: session.peerConnected });
-        if (!session.peerConnected) handlePeerLeft();
+    case 'peer': {
+      if (!isHost()) break;
+      const wasConnected = session.peerConnected;
+      session.peerConnected = !!msg.joined;
+      ui.updateLobby({ isHost: true, guestConnected: session.peerConnected });
+      if (!session.peerConnected) {
+        handlePeerLeft();
+      } else if (session.started && !wasConnected) {
+        prepareRemoteGuest();
+        sendToGuest({ t: 'start' });
+        ui.toast('Spieler 2 ist während der Schicht dazugekommen.', '', 4600);
       }
       break;
+    }
     case 'host-left':
       if (isGuest()) endCoopSession('Der Host hat die Sitzung beendet.');
       break;
@@ -1289,8 +1304,10 @@ let dollNet = null;
 let lastSpinnerSig = '';
 let lastPickupSig = '';
 let lastShopSig = '';
+let lastCarrySig = '';
 
 function applyGuestPhase(phase) {
+  if (phase !== 'day' && session.shopOpen) closeGuestShop(false);
   world.setPhase(phase);
   audio.setPhase(phase);
   if (phase === 'day') {
@@ -1318,6 +1335,12 @@ function applyGuestPhase(phase) {
       world.lightTargets.lamp = 0.15;
       world.lightTargets.emerg = 0;
       world.lightTargets.safe = 5;
+      blackoutTimer = 8;
+      setTimeout(() => {
+        if (state.phase === 'night' && state.nightMod === 'blackout') {
+          ui.toast('Stromausfall: F schaltet die Taschenlampe. Ohne sie siehst du fast nichts.', 'warn', 6600);
+        }
+      }, 3200);
     }
     if (state.nightMod === 'blood') document.body.classList.add('night-blood');
     audio.siren();
@@ -1325,11 +1348,13 @@ function applyGuestPhase(phase) {
 }
 
 function applyGuestPickups(list) {
-  const sig = (list || []).map((p) => `${p.x}|${p.z}|${p.taken ? 1 : 0}`).join(';');
+  const items = list || [];
+  const sig = items.map((p) => `${p.x}|${p.z}|${p.taken ? 1 : 0}`).join(';');
   if (sig === lastPickupSig) return;
   lastPickupSig = sig;
+  state.pickups = items;
   for (let i = 0; i < world.pickups.length; i++) {
-    const p = list && list[i];
+    const p = items[i];
     world.setPickupVisible(i, !!p && !p.taken, p ? p.x : 0, p ? p.z : 0);
   }
 }
@@ -1362,18 +1387,21 @@ function applyGuestSnapshot(s) {
   state.spoolsMade = s.spoolsMade;
   state.order = s.order;
   state.ordersDone = s.ordersDone;
-  state.pickups = s.pickups || [];
   state.upgrades = s.upgrades || state.upgrades;
   state.stats = getStats(state.upgrades);
   state.lore = s.lore;
   state.endless = s.endless;
 
-  player.carrying.length = 0;
-  for (const sp of s.guestCarry || []) {
-    player.carrying.push({ value: Math.max(0, sp.value || 0), counts: normalizeCounts(sp.counts) });
+  const carrySig = (s.guestCarry || []).map((sp) => Math.round(sp.value || 0)).join(',');
+  if (carrySig !== lastCarrySig) {
+    lastCarrySig = carrySig;
+    player.carrying.length = 0;
+    for (const sp of s.guestCarry || []) {
+      player.carrying.push({ value: Math.max(0, sp.value || 0), counts: normalizeCounts(sp.counts) });
+    }
+    player.updateCarryDisplay();
+    state.carried = player.carrying;
   }
-  player.updateCarryDisplay();
-  state.carried = player.carrying;
 
   if (s.guestPos) {
     const dx = player.position.x - s.guestPos.x;
@@ -1430,7 +1458,7 @@ function applyGuestSnapshot(s) {
     doll.setZoneFraction(z.id, (state.zoneRemaining[z.id] || 0) / z.cap);
   }
   if (typeof s.lightsOut === 'number') world.lightsOut = Math.max(world.lightsOut || 0, s.lightsOut);
-  applyGuestPickups(state.pickups);
+  applyGuestPickups(s.pickups);
 
   if (hostAvatar) hostAvatar.setTarget(s.host.x, s.host.z, s.host.yaw, s.host.carry > 0);
 
@@ -1441,13 +1469,15 @@ function applyGuestSnapshot(s) {
     resetGuestDay();
   }
 
-  if (session.shopOpen) {
-    const sig = `${state.money}|${state.phase}|${state.upgrades.ladder}|${UPGRADE_ORDER.map((id) => state.upgrades[id]).join(',')}`;
-    if (sig !== lastShopSig) {
-      lastShopSig = sig;
-      ui.renderShop(state);
-    }
-  }
+  renderGuestShopIfChanged();
+}
+
+function renderGuestShopIfChanged() {
+  if (!session.shopOpen) return;
+  const sig = `${state.money}|${state.phase}|${state.upgrades.ladder}|${UPGRADE_ORDER.map((id) => state.upgrades[id]).join(',')}`;
+  if (sig === lastShopSig) return;
+  lastShopSig = sig;
+  ui.renderShop(state);
 }
 
 function handleGuestEvent(e) {
@@ -1558,6 +1588,14 @@ function updateGuestGame(dt) {
 
   if (dollNet) doll.applyNetwork(dt, dollNet, player.position);
   if (hostAvatar) hostAvatar.update(dt);
+  if (state.phase === 'night' && state.nightMod === 'blackout') {
+    blackoutTimer -= dt;
+    if (blackoutTimer <= 0) {
+      blackoutTimer = 11 + Math.random() * 8;
+      world.lightsOut = 0.18;
+      audio.creakLong();
+    }
+  }
   updatePickupGlint(dt);
 
   const tune = state.phase === 'night' ? nightTuning(state.nightMod) : null;
@@ -1586,13 +1624,7 @@ function updateGuestGame(dt) {
   if (uiTimer >= 0.1) {
     uiTimer = 0;
     syncUI();
-    if (session.shopOpen) {
-      const sig = `${state.money}|${state.phase}|${state.upgrades.ladder}|${UPGRADE_ORDER.map((id) => state.upgrades[id]).join(',')}`;
-      if (sig !== lastShopSig) {
-        lastShopSig = sig;
-        ui.renderShop(state);
-      }
-    }
+    renderGuestShopIfChanged();
   }
 
   guestInputTimer -= dt;
@@ -1893,6 +1925,13 @@ function startNight() {
     world.lightTargets.lamp = 0.15;
     world.lightTargets.emerg = 0;
     world.lightTargets.safe = 5;
+    blackoutTimer = 8;
+    setTimeout(() => {
+      if (state.phase === 'night' && state.nightMod === 'blackout') {
+        ui.toast('Stromausfall: F schaltet die Taschenlampe. Ohne sie siehst du fast nichts.', 'warn', 6600);
+        audio.creakLong();
+      }
+    }, 3200);
   }
   if (state.nightMod === 'blood') document.body.classList.add('night-blood');
   audio.setPhase('night');
@@ -2958,6 +2997,7 @@ let doorBangTimer = 0;
 let doorHalfWarned = false;
 let doorLowWarned = false;
 let stormTimer = 0;
+let blackoutTimer = 0;
 
 function breakDoor() {
   state.doorBroken = true;
@@ -3111,6 +3151,14 @@ function updateGame(dt) {
       audio.creak();
     }
   }
+  if (state.phase === 'night' && state.nightMod === 'blackout') {
+    blackoutTimer -= dt;
+    if (blackoutTimer <= 0) {
+      blackoutTimer = 11 + Math.random() * 8;
+      world.lightsOut = 0.18;
+      audio.creakLong();
+    }
+  }
   updatePickupGlint(dt);
 
   // flashlight
@@ -3148,6 +3196,21 @@ function syncUI() {
   state.insideSafe = isProtected(player.position);
   state.playerStamina = player.stamina;
   ui.update(state, { stage: state.stage, objective: computeObjective() });
+  updatePartnerHud();
+}
+
+function updatePartnerHud() {
+  if (!isCoop() || !session.started || !session.peerConnected) {
+    ui.setPartner(null);
+    return;
+  }
+  const pos = isHost() ? (remote.active ? remote.position : null) : (hostAvatar ? hostAvatar.position : null);
+  if (!pos) {
+    ui.setPartner(null);
+    return;
+  }
+  const inside = pos.x < WORLD.safe.maxX && pos.z > WORLD.safe.minZ;
+  ui.setPartner(isHost() ? 'SPIELER 2' : 'SPIELER 1', inside);
 }
 
 function metresTo(x, z) {
@@ -3341,8 +3404,8 @@ window.addEventListener('beforeunload', () => {
 const params = new URLSearchParams(location.search);
 if (params.has('debug')) {
   window.__zwirn = {
-    state, player, doll, johann, world, ui, audio, scene, camera, THREE,
-    net, session, remote,
+    state, player, doll, johann, world, ui, audio, scene, camera, THREE, renderer,
+    net, session, remote, buildSnapshot,
     startGame, beginDay, startDusk, startNight, endNight,
     updateGame, updateGuestGame, updateInteractions, catchPlayer, sellAll,
     finishWinding, gainYarn, buyUpgrade, saveGame, loadRun,

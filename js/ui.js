@@ -51,6 +51,9 @@ export class UI {
       modEffect: $('mod-effect'),
       carryCount: $('carry-count'),
       carryList: $('carry-list'),
+      partnerPanel: $('partner-panel'),
+      partnerState: $('partner-state'),
+      partnerName: $('partner-name'),
       machinePanel: $('machine-panel'),
       machineState: $('machine-state'),
       bufferText: $('buffer-text'),
@@ -269,6 +272,18 @@ export class UI {
     }
   }
 
+  setPartner(name, inside = false) {
+    if (!name) {
+      this.el.partnerPanel.classList.add('hidden');
+      return;
+    }
+    this.el.partnerPanel.classList.remove('hidden');
+    this.el.partnerName.textContent = name;
+    this.el.partnerState.textContent = inside ? 'IM SAFE ROOM' : 'DRAUSSEN';
+    this.el.partnerState.classList.toggle('safe', inside);
+    this.el.partnerState.classList.toggle('outside', !inside);
+  }
+
   toggleControls(force) {
     this.controlsOpen = force !== undefined ? force : !this.controlsOpen;
     this.el.controlsCard.classList.toggle('hidden', !this.controlsOpen);
@@ -333,13 +348,17 @@ export class UI {
 
     const stats = state.stats;
     const cap = stats.carryCap;
-    this.el.carryCount.textContent = `${state.carried.length} / ${cap}`;
-    if (state.carried.length === 0) {
-      this.el.carryList.innerHTML = '<span class="empty">Keine Spule</span>';
-    } else {
-      this.el.carryList.innerHTML = state.carried
-        .map((s, i) => `<div class="spool-item"><span>Spule ${i + 1}</span><b>${formatMoney(s.value)}</b></div>`)
-        .join('');
+    const carrySig = `${cap}|${state.carried.map((s) => Math.round(s.value)).join(',')}`;
+    if (carrySig !== this._carrySig) {
+      this._carrySig = carrySig;
+      this.el.carryCount.textContent = `${state.carried.length} / ${cap}`;
+      if (state.carried.length === 0) {
+        this.el.carryList.innerHTML = '<span class="empty">Keine Spule</span>';
+      } else {
+        this.el.carryList.innerHTML = state.carried
+          .map((s, i) => `<div class="spool-item"><span>Spule ${i + 1}</span><b>${formatMoney(s.value)}</b></div>`)
+          .join('');
+      }
     }
 
     this.el.machinePanel.classList.toggle('hidden', state.upgrades.auto === 0);
@@ -449,13 +468,21 @@ export class UI {
 
   showNightBanner(text = 'DIE PUPPE IST WACH') {
     this.el.nightBannerText.textContent = text;
-    this.el.nightBanner.classList.remove('hidden');
+    this.el.nightBanner.classList.remove('hidden', 'leaving');
     clearTimeout(this.nightTimer);
-    this.nightTimer = setTimeout(() => this.el.nightBanner.classList.add('hidden'), 4200);
+    clearTimeout(this.nightFadeTimer);
+    this.nightFadeTimer = setTimeout(() => this.el.nightBanner.classList.add('leaving'), 3500);
+    this.nightTimer = setTimeout(() => {
+      this.el.nightBanner.classList.add('hidden');
+      this.el.nightBanner.classList.remove('leaving');
+    }, 4100);
   }
 
   hideNightBanner() {
+    clearTimeout(this.nightTimer);
+    clearTimeout(this.nightFadeTimer);
     this.el.nightBanner.classList.add('hidden');
+    this.el.nightBanner.classList.remove('leaving');
   }
 
   setDanger(on, text = 'SIE IST WACH') {

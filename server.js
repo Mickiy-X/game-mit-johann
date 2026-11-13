@@ -60,6 +60,12 @@ function serveStatic(req, res) {
     res.end('Zugriff verweigert');
     return;
   }
+  const rel = path.relative(ROOT, filePath);
+  if (rel.split(path.sep).some((part) => part.startsWith('.'))) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Nicht gefunden');
+    return;
+  }
 
   fs.stat(filePath, (err, stat) => {
     if (err || !stat.isFile()) {
