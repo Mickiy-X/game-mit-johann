@@ -1057,6 +1057,7 @@ net.on('close', () => {
     remote.active = false;
     remote.pulling = false;
     if (guestAvatar) { guestAvatar.dispose(); guestAvatar = null; }
+    ui.setNetBadge(null);
     ui.toast('Verbindung zu Spieler 2 verloren. Du spielst allein weiter.', 'warn', 6200);
   } else if (isHost()) {
     leaveLobby();
@@ -1070,6 +1071,7 @@ function handlePeerLeft() {
   remote.carrying.length = 0;
   if (guestAvatar) { guestAvatar.dispose(); guestAvatar = null; }
   if (session.started) {
+    ui.setNetBadge(null);
     ui.toast('Spieler 2 hat die Sitzung verlassen. Du spielst allein weiter.', 'warn', 6200);
   } else {
     ui.setKoopNote('Spieler 2 hat die Lobby verlassen.', true);
@@ -1286,6 +1288,7 @@ function sellAllFor(who) {
 let dollNet = null;
 let lastSpinnerSig = '';
 let lastPickupSig = '';
+let lastShopSig = '';
 
 function applyGuestPhase(phase) {
   world.setPhase(phase);
@@ -1299,11 +1302,23 @@ function applyGuestPhase(phase) {
     ui.setNight(true);
     ui.showNightBanner('SONNENUNTERGANG · AB IN DEN SAFE ROOM');
     ui.setDanger(true, 'SIE WACHT AUF');
+    document.body.classList.remove('night-blood');
     audio.siren();
   } else if (phase === 'night') {
+    const mod = state.nightMod ? NIGHT_MODS[state.nightMod] : null;
     ui.setNight(true);
-    ui.showNightBanner('DIE PUPPE IST WACH');
+    ui.showNightBanner(mod ? `${mod.name} · SIE IST WACH` : 'DIE PUPPE IST WACH');
     ui.setDanger(true, 'SIE JAGT DICH');
+    if (state.nightMod === 'storm') {
+      world.lightTargets.fog = 0.048;
+      world.lightTargets.lamp = 1.2;
+    }
+    if (state.nightMod === 'blackout') {
+      world.lightTargets.fog = 0.042;
+      world.lightTargets.lamp = 0.15;
+      world.lightTargets.emerg = 0;
+      world.lightTargets.safe = 5;
+    }
     if (state.nightMod === 'blood') document.body.classList.add('night-blood');
     audio.siren();
   }
@@ -1426,7 +1441,13 @@ function applyGuestSnapshot(s) {
     resetGuestDay();
   }
 
-  if (session.shopOpen) ui.renderShop(state);
+  if (session.shopOpen) {
+    const sig = `${state.money}|${state.phase}|${state.upgrades.ladder}|${UPGRADE_ORDER.map((id) => state.upgrades[id]).join(',')}`;
+    if (sig !== lastShopSig) {
+      lastShopSig = sig;
+      ui.renderShop(state);
+    }
+  }
 }
 
 function handleGuestEvent(e) {
@@ -1436,6 +1457,7 @@ function handleGuestEvent(e) {
       ui.toast(e.text, e.type, e.duration);
       break;
     case 'caught':
+      clearCoopOverlays();
       ui.showCaught(e.sub || 'Sie hat dich gefunden.', 2400);
       audio.jumpscare();
       player.addShake(0.38, 1.2);
@@ -1456,6 +1478,8 @@ function handleGuestEvent(e) {
       audio.snap();
       break;
     case 'dawn':
+      clearCoopOverlays();
+      document.body.classList.remove('night-blood');
       state.mode = 'dawn';
       resetKeys();
       stopPull();
@@ -1470,6 +1494,7 @@ function handleGuestEvent(e) {
       ui.showDawn(e.data);
       break;
     case 'win':
+      clearCoopOverlays();
       state.mode = 'win';
       resetKeys();
       stopPull();
@@ -1490,6 +1515,7 @@ function handleGuestEvent(e) {
 }
 
 function resetGuestDay() {
+  clearCoopOverlays();
   state.mode = 'playing';
   ui.hideDawn();
   ui.hideWin();
@@ -1560,7 +1586,13 @@ function updateGuestGame(dt) {
   if (uiTimer >= 0.1) {
     uiTimer = 0;
     syncUI();
-    if (session.shopOpen) ui.renderShop(state);
+    if (session.shopOpen) {
+      const sig = `${state.money}|${state.phase}|${state.upgrades.ladder}|${UPGRADE_ORDER.map((id) => state.upgrades[id]).join(',')}`;
+      if (sig !== lastShopSig) {
+        lastShopSig = sig;
+        ui.renderShop(state);
+      }
+    }
   }
 
   guestInputTimer -= dt;
@@ -1769,6 +1801,7 @@ function openGuestShop() {
     return;
   }
   session.shopOpen = true;
+  lastShopSig = '';
   resetKeys();
   stopPull();
   ui.hidePull();
@@ -1778,12 +1811,20 @@ function openGuestShop() {
   if (document.pointerLockElement) document.exitPointerLock();
 }
 
-function closeGuestShop() {
+function closeGuestShop(relock = true) {
   if (!session.shopOpen) return;
   session.shopOpen = false;
   ui.closeShop();
   audio.uiClose();
-  lockPointer();
+  if (relock) lockPointer();
+}
+
+function clearCoopOverlays() {
+  if (session.shopOpen) closeGuestShop(false);
+  if (session.localPaused) {
+    session.localPaused = false;
+    ui.hidePause();
+  }
 }
 
 
@@ -1847,6 +1888,12 @@ function startNight() {
     world.lightTargets.lamp = 1.2;
     stormTimer = 3;
   }
+  if (state.nightMod === 'blackout') {
+    world.lightTargets.fog = 0.042;
+    world.lightTargets.lamp = 0.15;
+    world.lightTargets.emerg = 0;
+    world.lightTargets.safe = 5;
+  }
   if (state.nightMod === 'blood') document.body.classList.add('night-blood');
   audio.setPhase('night');
   ui.setNight(true);
@@ -1871,6 +1918,7 @@ function startNight() {
 
 function endNight() {
   if (state.mode !== 'playing' && state.mode !== 'caught') return;
+  clearCoopOverlays();
   const completed = state.day;
   const earned = state.dayEarned;
   const doorBroken = state.doorBroken;
@@ -2701,7 +2749,8 @@ function pauseGame() {
     audio.setPull(false, 0);
     audio.setWinding(false);
     audio.setMachine(false);
-    ui.showPause(settings.sens, settings.vol);
+    ui.showPause(settings.sens, settings.vol, true);
+    baseToast('Im Koop läuft die Schicht weiter – die Puppe auch.', 'warn', 4200);
     if (document.pointerLockElement) document.exitPointerLock();
     return;
   }
@@ -2949,6 +2998,9 @@ function catchPlayer() {
   ui.showCaught(sub, 2400);
   audio.jumpscare();
   player.addShake(0.38, 1.2);
+  if (isHost() && remote.active) {
+    sendToGuest({ t: 'ev', e: { kind: 'toast', text: 'Spieler 1 wurde erwischt.', type: 'danger', duration: 4200 } });
+  }
 
   player.reset(new THREE.Vector3(-14.2, 0, 18.2));
   player.yaw = 0;
@@ -3047,7 +3099,7 @@ function updateGame(dt) {
   updateDollAndJohann(dt);
   updateDoorCombat(dt);
   if (state.mode === 'playing') {
-    checkCatch();
+    if (!session.localPaused) checkCatch();
     checkRemoteCatch();
   }
 
@@ -3290,11 +3342,13 @@ const params = new URLSearchParams(location.search);
 if (params.has('debug')) {
   window.__zwirn = {
     state, player, doll, johann, world, ui, audio, scene, camera, THREE,
+    net, session, remote,
     startGame, beginDay, startDusk, startNight, endNight,
-    updateGame, updateInteractions, catchPlayer, sellAll,
+    updateGame, updateGuestGame, updateInteractions, catchPlayer, sellAll,
     finishWinding, gainYarn, buyUpgrade, saveGame, loadRun,
     syncUI, toggleDoor, openShop, closeShop, isProtected,
-    collectPickup, spawnPickups, restorePickups, generateOrder
+    collectPickup, spawnPickups, restorePickups, generateOrder,
+    applyGuestSnapshot, openGuestShop, closeGuestShop, dawnContinue
   };
 }
 

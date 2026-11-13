@@ -542,10 +542,15 @@ export class UI {
   }
 
   /* ---------------- Overlays ---------------- */
-  showPause(sens, vol) {
+  showPause(sens, vol, coop = false) {
     this.el.pause.classList.remove('hidden');
     this.el.sensRange.value = sens;
     this.el.volRange.value = vol;
+    this.el.pause.querySelector('.eyebrow').textContent = coop ? 'KOOP · SCHICHT LÄUFT WEITER' : 'SCHICHT UNTERBROCHEN';
+    this.el.pause.querySelector('h2').textContent = coop ? 'Lokale Pause' : 'Pause';
+    this.el.pause.querySelector('.tiny-note').textContent = coop
+      ? 'Koop: Die Welt läuft weiter – die Puppe auch. Nur dein Bild steht.'
+      : 'Tipp: Beim Verlassen des Spiels wird die Schicht automatisch gespeichert.';
   }
 
   hidePause() {
