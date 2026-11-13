@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZWIRN &amp; ZORN – Nachtschicht in der Puppenfabrik</title>
+  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧵</text></svg>" />
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div id="filters">
+    <div class="vignette"></div>
+    <div class="grain"></div>
+    <div class="scanlines"></div>
+  </div>
+
+  <!-- ===================== HUD ===================== -->
+  <div id="hud" class="hidden">
+    <div id="snap-flash"></div>
+    <div class="hud-top">
+      <div class="hud-panel shift-panel">
+        <div class="shift-day"><span id="day-label">TAG 1</span><span id="phase-label">TAGPHASE</span></div>
+        <div class="shift-timer" id="phase-timer">02:45</div>
+        <div class="shift-sub" id="phase-sub">Die Puppe schläft.</div>
+      </div>
+
+      <div class="hud-panel money-panel">
+        <div class="money-row">
+          <span class="micro-label">KONTO</span>
+          <span id="money-value">0 €</span>
+        </div>
+        <div class="goal-row">
+          <span>Fluchtticket</span>
+          <span id="goal-text">0 / 5.000 €</span>
+        </div>
+        <div class="mini-bar"><i id="goal-fill"></i></div>
+      </div>
+
+      <div class="hud-panel escalation-panel">
+        <div class="escalation-head">
+          <span class="micro-label">PUPPEN-ESKALATION</span>
+          <span id="stage-number">STUFE 1</span>
+        </div>
+        <div class="stage-name" id="stage-name">Die Schlafende</div>
+        <div class="escalation-bar"><i id="escalation-fill"></i></div>
+        <div class="stage-desc" id="stage-desc">Sie schläft. Noch.</div>
+      </div>
+    </div>
+
+    <div class="hud-panel objective-panel" id="objective-panel">
+      <div class="objective-head">
+        <span class="micro-label">SCHICHTPLAN</span>
+        <span id="objective-step">1 / 4</span>
+      </div>
+      <div class="objective-title" id="objective-title">Faden ziehen</div>
+      <div class="objective-sub" id="objective-sub">Geh zur ARM-L-Zone und halte E.</div>
+      <div class="objective-meter"><i id="objective-fill"></i></div>
+    </div>
+
+    <div class="hud-right">
+      <div class="hud-panel order-panel" id="order-panel">
+        <div class="order-head">
+          <span class="micro-label">KUNDENAUFTRAG</span>
+          <span class="order-bonus" id="order-bonus">+ 0 €</span>
+        </div>
+        <div class="order-client" id="order-client">—</div>
+        <div class="order-line" id="order-line">—</div>
+        <div class="order-bar"><i id="order-fill"></i></div>
+        <div class="order-progress" id="order-progress">0 / 0</div>
+      </div>
+      <div class="hud-panel carry-panel" id="carry-panel">
+        <div class="carry-head"><span class="micro-label">SPULEN</span><span id="carry-count">0 / 1</span></div>
+        <div id="carry-list" class="carry-list"><span class="empty">Keine Spule</span></div>
+      </div>
+      <div class="hud-panel machine-panel" id="machine-panel">
+        <div class="carry-head"><span class="micro-label">AUTOMATIK-SPINNER</span><span id="machine-state">LÄUFT</span></div>
+        <div class="machine-loud" id="machine-loud"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="machine-sub">Lärm zieht ihre Aufmerksamkeit an.</div>
+      </div>
+      <div class="hud-panel mod-panel hidden" id="mod-panel">
+        <div class="mod-head"><span class="micro-label">NACHTLAGE</span><span id="mod-tag">—</span></div>
+        <div class="mod-name" id="mod-name">—</div>
+        <div class="mod-effect" id="mod-effect">—</div>
+      </div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="hud-panel buffer-panel">
+        <div class="buffer-head">
+          <span class="micro-label">FADENVORRAT</span>
+          <span id="buffer-text">0 / 100</span>
+        </div>
+        <div class="buffer-bar"><i id="buffer-fill"></i></div>
+        <div class="quality-chips">
+          <span class="chip white"><b id="q-white">0</b> Weiß</span>
+          <span class="chip red"><b id="q-red">0</b> Rot</span>
+          <span class="chip black"><b id="q-black">0</b> Schwarz</span>
+          <span class="chip gold"><b id="q-gold">0</b> Gold</span>
+        </div>
+      </div>
+      <div class="stamina-wrap">
+        <span class="micro-label">AUSDAUER</span>
+        <div class="stamina-bar"><i id="stamina-fill"></i></div>
+        <div class="door-wrap hidden" id="door-wrap">
+          <div class="door-label"><span>TÜRSTABILITÄT</span><b id="door-text">100 %</b></div>
+          <div class="door-bar"><i id="door-fill"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="crosshair"></div>
+    <div id="prompt" class="hidden">
+      <span id="prompt-key">E</span>
+      <div class="prompt-body">
+        <div id="prompt-text">Faden ziehen</div>
+        <div id="prompt-sub">E halten</div>
+        <div class="prompt-progress hidden" id="prompt-progress"><i></i></div>
+      </div>
+    </div>
+
+    <div id="pull-ui" class="hidden">
+      <div class="pull-head">
+        <span id="pull-zone-name">LINKER ARM</span>
+        <span id="pull-rate">+ 0,0 Faden/s</span>
+      </div>
+      <div class="tension-track">
+        <div class="tension-zone green"></div>
+        <div class="tension-zone yellow"></div>
+        <div class="tension-zone red"></div>
+        <div class="tension-needle" id="tension-needle"></div>
+      </div>
+      <div class="pull-foot"><span>E halten: Spannung steigt</span><span>Loslassen: Spannung sinkt</span></div>
+    </div>
+
+    <div id="night-banner" class="hidden">
+      <div class="night-banner-inner">
+        <span class="night-eyebrow">NACHT</span>
+        <span id="night-banner-text">DIE PUPPE IST WACH</span>
+        <span class="night-sub">Ab in den Safe Room. Tür schließen.</span>
+      </div>
+    </div>
+
+    <div id="danger-banner" class="hidden">
+      <span class="danger-icon">!</span>
+      <span id="danger-text">SIE IST WACH</span>
+    </div>
+
+    <div id="toasts"></div>
+    <div id="net-badge" class="hidden">KOOP · ----</div>
+    <div id="hud-hint">WASD bewegen · Maus umsehen · E halten: arbeiten · F Lampe · B Katalog · ESC Pause</div>
+    <div id="aim-hint" class="hidden">Klicken, um die Maus zu greifen</div>
+  </div>
+
+  <!-- ===================== TITEL ===================== -->
+  <div id="title-screen" class="overlay">
+    <div class="title-inner">
+      <div class="eyebrow">NACHTSCHICHT IN DER PUPPENFABRIK</div>
+      <h1 class="game-title">ZWIRN<span>&amp;</span>ZORN</h1>
+      <div class="title-thread"><i></i><b>🧵</b><i></i></div>
+      <p class="lead">
+        Zieh den Faden aus der Puppe. Wickle ihn auf Spulen. Verkaufe sie.<br />
+        Und sei vor Sonnenuntergang in Sicherheit.
+      </p>
+
+      <div class="title-actions">
+        <label class="switch-row">
+          <input type="checkbox" id="bot-toggle" checked />
+          <span class="switch"></span>
+          <span>KI-Kollege <b>Johann</b> begleitet dich</span>
+        </label>
+        <button id="btn-continue" class="btn primary hidden">Schicht fortsetzen</button>
+        <button id="btn-start" class="btn primary">Neue Schicht starten</button>
+        <div class="button-row">
+          <button id="btn-controls" class="btn ghost">Steuerung</button>
+          <button id="btn-sound" class="btn ghost">Sound: AN</button>
+        </div>
+
+        <div class="koop-block">
+          <div class="koop-head"><span>ONLINE-KOOP</span><b>2 SPIELER</b></div>
+          <div class="koop-row">
+            <button id="btn-host" class="btn ghost">Koop hosten</button>
+            <span class="koop-or">oder</span>
+            <input id="join-code" class="koop-input" type="text" maxlength="4" autocomplete="off"
+              autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Raumcode" />
+            <button id="btn-join" class="btn ghost">Beitreten</button>
+          </div>
+          <p class="koop-note" id="koop-note">Gleiche Adresse, Raumcode teilen. Server: <code>node server.js</code></p>
+        </div>
+      </div>
+
+      <div class="title-footer">
+        <span>Prototyp · 2–4 Spieler-Koop-Vision als Solo-/KI-Erlebnis</span>
+        <span>Ziel: 5.000 € für das letzte Fluchtticket</span>
+      </div>
+    </div>
+
+    <div id="controls-card" class="controls-card hidden">
+      <button id="controls-close" class="icon-btn">×</button>
+      <h3>Steuerung</h3>
+      <div class="control-grid">
+        <div><kbd>W A S D</kbd><span>Bewegen</span></div>
+        <div><kbd>Maus</kbd><span>Umsehen</span></div>
+        <div><kbd>E</kbd><span>Benutzen / halten</span></div>
+        <div><kbd>Shift</kbd><span>Rennen</span></div>
+        <div><kbd>F</kbd><span>Taschenlampe</span></div>
+        <div><kbd>B</kbd><span>Katalog / Shop</span></div>
+        <div><kbd>Esc</kbd><span>Pause</span></div>
+      </div>
+      <h3>So funktioniert die Schicht</h3>
+      <ul class="help-list">
+        <li><b>Tag:</b> Faden aus den Körperzonen ziehen. Zu viel Spannung lässt ihn reißen.</li>
+        <li><b>Spulen:</b> Am Wickler aufwickeln, zur Verkaufsstation tragen, verkaufen.</li>
+        <li><b>Aufträge:</b> Der Kundenauftrag oben rechts zahlt Bonusgeld. Glücksknäuel in der Halle bringen Extra-Faden oder Geld.</li>
+        <li><b>Gier:</b> Jeder Faden macht die Puppe gruseliger – und gefährlicher.</li>
+        <li><b>Nacht:</b> Die Puppe jagt. Nur der Safe Room mit geschlossener Tür schützt dich.</li>
+        <li><b>Ziel:</b> 5.000 € erwirtschaften und morgens das Fluchtticket kaufen.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================== SHOP ===================== -->
+  <div id="shop" class="overlay hidden">
+    <div class="shop-panel">
+      <header class="shop-header">
+        <div>
+          <div class="eyebrow">FABRIK-KATALOG · LIEFERUNG SOFORT</div>
+          <h2>Investiere in die Nachtschicht</h2>
+        </div>
+        <div class="shop-header-right">
+          <div class="shop-money"><span class="micro-label">KONTO</span><b id="shop-money">0 €</b></div>
+          <button id="shop-close" class="btn ghost small">Schließen [B]</button>
+        </div>
+      </header>
+      <div class="shop-note">Upgrades gelten für die ganze Fabrik. Mehr Produktion bringt mehr Geld – und mehr Lärm.</div>
+      <div id="shop-grid" class="shop-grid"></div>
+      <footer class="shop-footer">
+        <span>Tagphase: Katalog verfügbar. Nachts: Beten.</span>
+        <span id="shop-escalation">Eskalation: Stufe 1</span>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ===================== KOOP-LOBBY ===================== -->
+  <div id="lobby" class="overlay hidden">
+    <div class="modal lobby-modal">
+      <div class="eyebrow">ONLINE-KOOP · 2 SPIELER</div>
+      <h2>Raum <span id="lobby-code">----</span></h2>
+      <p class="lobby-hint" id="lobby-hint">Teile den Code. Der Gast tritt auf der Startseite bei.</p>
+      <div class="lobby-slots">
+        <div class="lobby-slot">
+          <span class="slot-role">HOST</span>
+          <b>Spieler 1</b>
+          <span class="slot-state ok" id="slot-host">Verbunden</span>
+        </div>
+        <div class="lobby-slot">
+          <span class="slot-role">GAST</span>
+          <b>Spieler 2</b>
+          <span class="slot-state" id="slot-guest">Wartet auf Beitritt …</span>
+        </div>
+      </div>
+      <div class="lobby-actions">
+        <button id="lobby-start" class="btn primary" disabled>Schicht starten</button>
+        <button id="lobby-leave" class="btn ghost danger">Verlassen</button>
+      </div>
+      <p class="tiny-note">Gemeinsame Kasse, gemeinsame Puppe. Der KI-Kollege Johann bleibt draußen.</p>
+    </div>
+  </div>
+
+  <!-- ===================== PAUSE ===================== -->
+  <div id="pause" class="overlay hidden">
+    <div class="modal small-modal">
+      <div class="eyebrow">SCHICHT UNTERBROCHEN</div>
+      <h2>Pause</h2>
+      <div class="settings">
+        <label>Maus-Empfindlichkeit <input id="sens-range" type="range" min="0.3" max="2.2" step="0.05" value="1" /></label>
+        <label>Lautstärke <input id="vol-range" type="range" min="0" max="1" step="0.05" value="0.7" /></label>
+        <label>Blickfeld <input id="fov-range" type="range" min="65" max="95" step="1" value="74" /></label>
+        <label>Kamerabewegung <input id="motion-range" type="range" min="0" max="1" step="0.05" value="1" /></label>
+        <label>Helligkeit <input id="brightness-range" type="range" min="0.75" max="1.45" step="0.05" value="1.12" /></label>
+        <label>Grafikqualität
+          <select id="quality-select">
+            <option value="high">Hoch</option>
+            <option value="medium">Mittel</option>
+            <option value="low">Niedrig</option>
+          </select>
+        </label>
+      </div>
+      <button id="btn-resume" class="btn primary">Weiterspielen</button>
+      <button id="btn-pause-controls" class="btn ghost">Steuerung</button>
+      <button id="btn-quit" class="btn ghost danger">Zurück zum Titel</button>
+      <p class="tiny-note">Tipp: Beim Verlassen des Spiels wird die Schicht automatisch gespeichert.</p>
+    </div>
+  </div>
+
+  <!-- ===================== FEIERABEND / DAWN ===================== -->
+  <div id="dawn" class="overlay hidden">
+    <div class="modal dawn-modal">
+      <div class="eyebrow">SCHICHTENDE</div>
+      <h2>Tag <span id="dawn-day">1</span> überlebt</h2>
+      <p id="dawn-flavor" class="flavor">Die Puppe sitzt wieder auf ihrem Podest. Hat sie sich bewegt?</p>
+      <div class="stat-grid">
+        <div class="stat"><span class="micro-label">VERDIENST</span><b id="dawn-earned">+ 0 €</b></div>
+        <div class="stat"><span class="micro-label">KONTO</span><b id="dawn-money">0 €</b></div>
+        <div class="stat"><span class="micro-label">ESKALATION</span><b id="dawn-stage">Stufe 1</b></div>
+        <div class="stat"><span class="micro-label">SICHERHEITSTÜR</span><b id="dawn-door">100 %</b></div>
+      </div>
+      <div class="dawn-lore hidden" id="dawn-lore"><b>ARCHIVNOTIZ</b><span id="dawn-lore-text"></span></div>
+      <div class="dawn-tip" id="dawn-tip">Die Tür wurde repariert. Der Automatik-Spinner läuft wieder.</div>
+      <button id="dawn-continue" class="btn primary">Nächste Schicht</button>
+    </div>
+  </div>
+
+  <!-- ===================== CAUGHT ===================== -->
+  <div id="jumpscare" class="hidden">
+    <div class="js-face">
+      <div class="js-head">
+        <div class="js-crack c1"></div>
+        <div class="js-crack c2"></div>
+        <div class="js-crack c3"></div>
+        <div class="js-eyes"><i></i><i></i></div>
+        <div class="js-mouth"><span></span><span></span><span></span><span></span></div>
+      </div>
+    </div>
+    <div class="js-text">ERWISCHT</div>
+    <div class="js-sub" id="js-sub">Sie hat dich gefunden.</div>
+  </div>
+
+  <!-- ===================== WIN ===================== -->
+  <div id="win" class="overlay hidden">
+    <div class="modal win-modal">
+      <div class="eyebrow">FLUCHTTICKET GEKAUFT</div>
+      <h2>Du bist entkommen.</h2>
+      <p class="flavor" id="win-flavor">Hinter dir schließt sich das Fabriktor. Aus der Dunkelheit hört du ein leises Knarren – als würde jemand den Kopf drehen.</p>
+      <div class="stat-grid">
+        <div class="stat"><span class="micro-label">TAGE</span><b id="win-days">7</b></div>
+        <div class="stat"><span class="micro-label">ERWIRTSCHAFTET</span><b id="win-earned">5.120 €</b></div>
+        <div class="stat"><span class="micro-label">ESKALATION</span><b id="win-stage">Stufe 4</b></div>
+        <div class="stat"><span class="micro-label">SPULEN</span><b id="win-spools">0</b></div>
+      </div>
+      <button id="win-endless" class="btn primary">Endlos weiterarbeiten</button>
+      <button id="win-title" class="btn ghost">Zurück zum Titel</button>
+    </div>
+  </div>
+
+  <div id="loading">WEBSTUHL WIRD ANGEWORFEN …</div>
+
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.js" } }
+  </script>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
