@@ -22,11 +22,21 @@ export function orderProgressText(order) {
   return `${Math.floor(order.progress)} / ${order.target} Spulen`;
 }
 
-export function generateOrder({ day, stage, bonusMul = 1 }) {
-  const client = ORDER_CLIENTS[(Math.random() * ORDER_CLIENTS.length) | 0];
+function pickClient(avoidName) {
+  for (let i = 0; i < 4; i++) {
+    const client = ORDER_CLIENTS[(Math.random() * ORDER_CLIENTS.length) | 0];
+    if (client.name !== avoidName) return client;
+  }
+  return ORDER_CLIENTS[0];
+}
+
+export function generateOrder({ day, stage, bonusMul = 1, slot = 'a', forcedKind = null, targetScale = 1, avoidClient = null }) {
+  const client = pickClient(avoidClient);
   let kind, target;
 
-  if (day <= 1) {
+  if (forcedKind) {
+    kind = forcedKind;
+  } else if (day <= 1) {
     kind = 'count';
     target = 1;
   } else if (day === 2) {
@@ -46,6 +56,17 @@ export function generateOrder({ day, stage, bonusMul = 1 }) {
     }
   }
 
+  if (kind === 'count') {
+    if (!(target > 0)) target = Math.min(5, 2 + Math.floor((day - 1) / 4));
+    target = Math.max(1, Math.round(target * targetScale));
+  } else if (kind === 'value') {
+    if (!(target > 0)) target = Math.round((210 + day * 65 + stage * 30) / 10) * 10;
+    target = Math.max(50, Math.round((target * targetScale) / 10) * 10);
+  } else {
+    if (!(target > 0)) target = 3 + Math.floor(stage / 2);
+    target = Math.max(1, Math.round(target * targetScale));
+  }
+
   let base;
   if (kind === 'count') base = 55 + target * 45 + day * 4 + stage * 12;
   else if (kind === 'value') base = Math.round(target * 0.5 + 30 + stage * 15);
@@ -53,7 +74,7 @@ export function generateOrder({ day, stage, bonusMul = 1 }) {
   const bonus = Math.max(40, Math.round((base * bonusMul) / 5) * 5);
 
   return {
-    id: `d${day}-${kind}`,
+    id: `d${day}-${slot}-${kind}`,
     client: client.name,
     line: client.line,
     kind,
@@ -62,6 +83,31 @@ export function generateOrder({ day, stage, bonusMul = 1 }) {
     bonus,
     done: false
   };
+}
+
+function secondaryKind(avoidKind, stage) {
+  const pool = ['count', 'value'];
+  if (stage >= 2) pool.push('premium');
+  const options = pool.filter((k) => k !== avoidKind);
+  return options[(Math.random() * options.length) | 0];
+}
+
+export function generateOrders({ day, stage, bonusMul = 1 }) {
+  const first = generateOrder({ day, stage, bonusMul, slot: 'a' });
+  if (day < 2) return [first];
+
+  const second = day < 3
+    ? generateOrder({ day, stage, bonusMul: bonusMul * 0.7, slot: 'b', targetScale: 0.5, avoidClient: first.client })
+    : generateOrder({
+      day,
+      stage,
+      bonusMul: bonusMul * 0.7,
+      slot: 'b',
+      forcedKind: secondaryKind(first.kind, stage),
+      targetScale: 0.6,
+      avoidClient: first.client
+    });
+  return [first, second];
 }
 
 export function applySaleToOrder(order, spools) {

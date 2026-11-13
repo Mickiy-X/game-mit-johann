@@ -62,13 +62,29 @@
     <div class="hud-right">
       <div class="hud-panel order-panel" id="order-panel">
         <div class="order-head">
-          <span class="micro-label">KUNDENAUFTRAG</span>
-          <span class="order-bonus" id="order-bonus">+ 0 €</span>
+          <span class="micro-label">KUNDENAUFTRÄGE</span>
+          <span class="order-hint hidden" id="order-hint">T WECHSELN</span>
         </div>
-        <div class="order-client" id="order-client">—</div>
-        <div class="order-line" id="order-line">—</div>
-        <div class="order-bar"><i id="order-fill"></i></div>
-        <div class="order-progress" id="order-progress">0 / 0</div>
+        <div class="order-list">
+          <div class="order-card" id="order-card-0">
+            <div class="order-top">
+              <span class="order-client">—</span>
+              <span class="order-bonus">+ 0 €</span>
+            </div>
+            <div class="order-line">—</div>
+            <div class="order-bar"><i class="order-fill"></i></div>
+            <div class="order-progress">0 / 0</div>
+          </div>
+          <div class="order-card hidden" id="order-card-1">
+            <div class="order-top">
+              <span class="order-client">—</span>
+              <span class="order-bonus">+ 0 €</span>
+            </div>
+            <div class="order-line">—</div>
+            <div class="order-bar"><i class="order-fill"></i></div>
+            <div class="order-progress">0 / 0</div>
+          </div>
+        </div>
       </div>
       <div class="hud-panel carry-panel" id="carry-panel">
         <div class="carry-head"><span class="micro-label">SPULEN</span><span id="carry-count">0 / 1</span></div>
@@ -153,7 +169,7 @@
 
     <div id="toasts"></div>
     <div id="net-badge" class="hidden">KOOP · ----</div>
-    <div id="hud-hint">WASD bewegen · Maus umsehen · E halten: arbeiten · F Lampe · B Katalog · ESC Pause</div>
+    <div id="hud-hint">WASD bewegen · Maus umsehen · E halten: arbeiten · F Lampe · T Auftrag · B Katalog · ESC Pause</div>
     <div id="aim-hint" class="hidden">Klicken, um die Maus zu greifen</div>
   </div>
 
@@ -209,6 +225,7 @@
         <div><kbd>E</kbd><span>Benutzen / halten</span></div>
         <div><kbd>Shift</kbd><span>Rennen</span></div>
         <div><kbd>F</kbd><span>Taschenlampe</span></div>
+        <div><kbd>T</kbd><span>Auftrags-Fokus wechseln</span></div>
         <div><kbd>B</kbd><span>Katalog / Shop</span></div>
         <div><kbd>Esc</kbd><span>Pause</span></div>
       </div>
@@ -216,7 +233,7 @@
       <ul class="help-list">
         <li><b>Tag:</b> Faden aus den Körperzonen ziehen. Zu viel Spannung lässt ihn reißen.</li>
         <li><b>Spulen:</b> Am Wickler aufwickeln, zur Verkaufsstation tragen, verkaufen.</li>
-        <li><b>Aufträge:</b> Der Kundenauftrag oben rechts zahlt Bonusgeld. Glücksknäuel in der Halle bringen Extra-Faden oder Geld.</li>
+        <li><b>Aufträge:</b> Bis zu zwei Kundenaufträge laufen parallel. Jeder Verkauf zählt für den markierten Auftrag – mit T wechselst du. Glücksknäuel in der Halle bringen Extra-Faden oder Geld.</li>
         <li><b>Gier:</b> Jeder Faden macht die Puppe gruseliger – und gefährlicher.</li>
         <li><b>Nacht:</b> Die Puppe jagt. Nur der Safe Room mit geschlossener Tür schützt dich.</li>
         <li><b>Ziel:</b> 5.000 € erwirtschaften und morgens das Fluchtticket kaufen.</li>
@@ -265,7 +282,8 @@
         </div>
       </div>
       <div class="lobby-actions">
-        <button id="lobby-start" class="btn primary" disabled>Schicht starten</button>
+        <button id="lobby-continue" class="btn hidden" disabled>Gespeicherte Schicht</button>
+        <button id="lobby-start" class="btn primary" disabled>Neue Schicht</button>
         <button id="lobby-leave" class="btn ghost danger">Verlassen</button>
       </div>
       <p class="tiny-note">Gemeinsame Kasse, gemeinsame Puppe. Der KI-Kollege Johann bleibt draußen.</p>

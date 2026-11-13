@@ -334,17 +334,33 @@ body.caught .grain { opacity: 0.16; }
 
 .order-panel { padding: 10px 14px; border-color: rgba(255,181,71,0.18); }
 .order-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.order-hint {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  white-space: nowrap;
+}
+.order-list { margin-top: 7px; display: flex; flex-direction: column; gap: 7px; }
+.order-card {
+  padding-left: 8px;
+  border-left: 2px solid rgba(255,181,71,0.16);
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+.order-card.active { border-left-color: var(--amber); }
+.order-card.active .order-client { color: #ffe0a3; }
+.order-card.done { opacity: 0.62; border-left-color: rgba(143,224,122,0.4); }
+.order-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .order-bonus { font-family: var(--font-mono); font-size: 9.5px; color: var(--amber); letter-spacing: 0.05em; white-space: nowrap; }
 .order-client {
-  margin-top: 6px;
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   line-height: 1.2;
   color: var(--porcelain);
 }
 .order-line { margin-top: 2px; font-size: 9.5px; color: var(--muted); }
-.order-bar { height: 3px; background: rgba(255,255,255,0.09); margin: 8px 0 5px; overflow: hidden; }
+.order-bar { height: 3px; background: rgba(255,255,255,0.09); margin: 6px 0 4px; overflow: hidden; }
 .order-bar i {
   display: block;
   height: 100%;
@@ -353,10 +369,9 @@ body.caught .grain { opacity: 0.16; }
   transition: width 0.35s ease;
 }
 .order-progress { font-family: var(--font-mono); font-size: 9.5px; color: #bdb4a7; }
-.order-panel.done { border-color: rgba(143,224,122,0.35); }
-.order-panel.done .order-bonus,
-.order-panel.done .order-progress { color: var(--green); }
-.order-panel.done .order-bar i { background: linear-gradient(90deg, #3c7d37, var(--green)); }
+.order-card.done .order-bonus,
+.order-card.done .order-progress { color: var(--green); }
+.order-card.done .order-bar i { background: linear-gradient(90deg, #3c7d37, var(--green)); }
 
 .mod-panel { padding: 10px 14px; border-color: rgba(255,255,255,0.1); }
 .mod-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }

@@ -12,7 +12,7 @@ import {
   GOAL, DAY_LENGTH, DUSK_LENGTH, nightLength, stageFor,
   STAGE_NAMES, QUALITY, PULL_BASE_RATE
 } from './balance.js';
-import { generateOrder, applySaleToOrder, orderRequirementText } from './orders.js';
+import { generateOrder, generateOrders, applySaleToOrder, orderRequirementText } from './orders.js';
 import { NIGHT_MODS, pickNightMod, nightTuning } from './nights.js';
 import { LORE_FRAGMENTS } from './lore.js';
 
@@ -196,6 +196,7 @@ function updatePullRibbon(tension, time) {
 const START_ZONES = Object.fromEntries(WORLD.zones.map(z => [z.id, z.cap]));
 const SETTINGS_KEY = 'zwirn_settings_v1';
 const SAVE_KEY = 'zwirn_save_v1';
+let pendingGuestCarry = null;
 
 let settings = { sens: 1, vol: 0.7, muted: false, bot: true, fov: 74, motion: 1, brightness: 1.12, quality: 'high' };
 try {
@@ -240,7 +241,8 @@ function newState() {
     endless: false,
     started: false,
     lastCompletedDay: 0,
-    order: null,
+    orders: [],
+    orderFocus: 0,
     ordersDone: 0,
     nightMod: null,
     lastNightMod: null,
@@ -286,6 +288,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'KeyB' && !e.repeat) { toggleShop(); return; }
   if (e.code === 'KeyF' && !e.repeat) { toggleFlashlight(); return; }
+  if (e.code === 'KeyT' && !e.repeat) { cycleOrderFocus(); return; }
   if (e.code === 'KeyE') {
     if (!keys.e && !e.repeat) pressE = true;
     keys.e = true;
@@ -367,7 +370,7 @@ function loadRaw() {
 }
 
 function saveGame() {
-  if (!state.started || isCoop()) return;
+  if (!state.started || isGuest()) return;
   try {
     const data = {
       v: 1,
@@ -380,11 +383,15 @@ function saveGame() {
       zoneRemaining: state.zoneRemaining,
       buffer: state.buffer,
       carried: state.carried.map(s => ({ value: s.value, counts: s.counts })),
+      guestCarried: isHost() && remote.active
+        ? remote.carrying.map(s => ({ value: s.value, counts: s.counts }))
+        : [],
       doorHealth: state.doorHealth,
       spoolsMade: state.spoolsMade,
       endless: state.endless,
       goalAnnounced: state.goalAnnounced,
-      order: state.order,
+      orders: state.orders,
+      orderFocus: state.orderFocus,
       ordersDone: state.ordersDone,
       lastNightMod: state.lastNightMod,
       pickups: state.pickups,
@@ -449,14 +456,31 @@ function loadRun() {
   state.goalAnnounced = !!data.goalAnnounced || state.totalEarned >= GOAL;
   state.zoneWarned = {};
   state.insideSafe = false;
-  state.order = normalizeOrder(data.order);
+  state.orders = normalizeOrders(data.orders, data.order);
+  state.orderFocus = Math.max(0, Math.min(state.orders.length - 1, Math.floor(data.orderFocus || 0)));
   state.ordersDone = Math.max(0, Math.floor(data.ordersDone || 0));
   state.lastNightMod = typeof data.lastNightMod === 'string' ? data.lastNightMod : null;
   state.nightMod = null;
   state.pickups = normalizePickups(data.pickups);
   state.lore = Math.max(0, Math.min(LORE_FRAGMENTS.length, Math.floor(data.lore || 0)));
+  pendingGuestCarry = Array.isArray(data.guestCarried)
+    ? data.guestCarried
+      .filter((s) => s && typeof s.value === 'number')
+      .slice(0, state.stats.carryCap)
+      .map((s) => ({ value: Math.max(0, s.value), counts: normalizeCounts(s.counts) }))
+    : null;
   state.started = true;
   return true;
+}
+
+function normalizeOrders(list, legacy) {
+  const source = Array.isArray(list) ? list : legacy ? [legacy] : [];
+  const out = [];
+  for (const o of source.slice(0, 2)) {
+    const order = normalizeOrder(o);
+    if (order) out.push(order);
+  }
+  return out;
 }
 
 function normalizeOrder(o) {
@@ -526,6 +550,7 @@ ui.bind({
   onHost: () => beginHost(),
   onJoin: (code) => beginJoin(code),
   onLobbyStart: () => startHostCoop(),
+  onLobbyContinue: () => startHostCoop(true),
   onLobbyLeave: () => leaveLobby(),
   onSensitivity: (v) => { settings.sens = v; saveSettings(); },
   onVolume: (v) => {
@@ -608,6 +633,7 @@ function startGame(continueGame) {
   ui.hideCaught();
   ui.setSoundLabel(!settings.muted);
 
+  pendingGuestCarry = null;
   let loaded = false;
   if (continueGame) loaded = loadRun();
   if (!loaded) {
@@ -638,7 +664,8 @@ function startGame(continueGame) {
     state.machineSabotaged = false;
     state.spoolsMade = 0;
     state.endless = false;
-    state.order = null;
+    state.orders = [];
+    state.orderFocus = 0;
     state.ordersDone = 0;
     state.nightMod = null;
     state.lastNightMod = null;
@@ -690,12 +717,13 @@ function beginDay(resetEarnings) {
   document.body.classList.remove('night-blood');
   if (resetEarnings) state.dayEarned = 0;
 
-  if (!state.order) {
-    state.order = generateOrder({
+  if (!state.orders || state.orders.length === 0) {
+    state.orders = generateOrders({
       day: state.day,
       stage: state.stage,
       bonusMul: state.stats.orderBonusMul
     });
+    state.orderFocus = 0;
   }
   if (!state.pickups || state.pickups.length === 0) {
     state.pickups = spawnPickups(state.day);
@@ -758,22 +786,29 @@ function beginDay(resetEarnings) {
   syncSpinner(true);
   syncUI();
 
-  if (state.day === 1 && !introHintsScheduled && state.order) {
+  const firstOrder = state.orders[0];
+  if (state.day === 1 && !introHintsScheduled && firstOrder) {
     introHintsScheduled = true;
-    const req = orderRequirementText(state.order);
+    const req = orderRequirementText(firstOrder);
     setTimeout(() => {
       if (state.mode === 'playing') {
-        ui.toast(`Kundenauftrag: ${state.order.client} ${req}. Bonus: ${formatMoney(state.order.bonus)}.`, '', 7200);
+        ui.toast(`Kundenauftrag: ${firstOrder.client} ${req}. Bonus: ${formatMoney(firstOrder.bonus)}.`, '', 7200);
       }
     }, 9500);
     setTimeout(() => {
       if (state.mode === 'playing') ui.toast('Irgendwo glitzert ein Glücksknäuel. Folg dem Licht.', '', 5200);
     }, 18000);
   }
+  if (state.day === 2 && state.orders.length > 1) {
+    setTimeout(() => {
+      if (state.mode === 'playing') ui.toast('Zweiter Auftrag im Buch. Mit T wählst du, welcher Verkauf zählt.', '', 6800);
+    }, 11000);
+  }
 }
 
 function quitToTitle() {
   if (isCoop()) {
+    if (isHost()) saveGame();
     endCoopSession('Sitzung beendet.');
     return;
   }
@@ -886,7 +921,8 @@ function openHostLobby(code) {
   session.peerConnected = false;
   ui.setKoopNote(`Raum ${code} erstellt. Code an Spieler 2 weitergeben.`);
   ui.hideTitle();
-  ui.showLobby({ code, isHost: true });
+  const saved = loadRaw();
+  ui.showLobby({ code, isHost: true, hasSave: !!saved, saveDay: saved ? saved.day : 0 });
 }
 
 function openGuestLobby(code) {
@@ -917,7 +953,7 @@ function prepareRemoteGuest() {
   guestAvatar.setVisible(true);
 }
 
-function startHostCoop() {
+function startHostCoop(continueGame = false) {
   if (!isHost() || !session.peerConnected || session.started) return;
   session.started = true;
   session.localPaused = false;
@@ -925,10 +961,20 @@ function startHostCoop() {
   ui.hideLobby();
   ui.setNetBadge(`KOOP · ${session.code}`);
 
+  const resume = !!continueGame && hasSave();
   prepareRemoteGuest();
   sendToGuest({ t: 'start' });
-  startGame(false);
-  ui.toast('Koop-Schicht gestartet. Spieler 2 ist dabei.', '', 4600);
+  startGame(resume);
+  if (resume && pendingGuestCarry && pendingGuestCarry.length) {
+    for (const sp of pendingGuestCarry) remote.carrying.push(sp);
+  }
+  pendingGuestCarry = null;
+  ui.toast(
+    resume
+      ? `Koop-Schicht fortgesetzt: Tag ${state.day}. Spieler 2 ist dabei.`
+      : 'Koop-Schicht gestartet. Spieler 2 ist dabei.',
+    '', 4600
+  );
 }
 
 function startGuest() {
@@ -975,7 +1021,8 @@ function startGuest() {
   state.machineSabotaged = false;
   state.spoolsMade = 0;
   state.endless = false;
-  state.order = null;
+  state.orders = [];
+  state.orderFocus = 0;
   state.ordersDone = 0;
   state.nightMod = null;
   state.lastNightMod = null;
@@ -1178,7 +1225,8 @@ function buildSnapshot() {
     nightMod: state.nightMod,
     machineSabotaged: state.machineSabotaged,
     spoolsMade: state.spoolsMade,
-    order: state.order,
+    orders: state.orders,
+    orderFocus: state.orderFocus,
     ordersDone: state.ordersDone,
     pickups: state.pickups.map((p) => ({ x: p.x, z: p.z, type: p.type, reward: p.reward, taken: p.taken })),
     upgrades: state.upgrades,
@@ -1252,6 +1300,9 @@ function handleGuestAction(msg) {
     case 'buy':
       if (state.phase !== 'day') return;
       buyUpgrade(msg.id, true);
+      break;
+    case 'focus':
+      cycleOrderFocus();
       break;
     case 'repair':
       if (!near(WORLD.spinner.x, WORLD.spinner.z, 3.6)) return;
@@ -1385,7 +1436,8 @@ function applyGuestSnapshot(s) {
   state.nightMod = s.nightMod;
   state.machineSabotaged = s.machineSabotaged;
   state.spoolsMade = s.spoolsMade;
-  state.order = s.order;
+  state.orders = Array.isArray(s.orders) ? s.orders : [];
+  state.orderFocus = s.orderFocus || 0;
   state.ordersDone = s.ordersDone;
   state.upgrades = s.upgrades || state.upgrades;
   state.stats = getStats(state.upgrades);
@@ -1980,7 +2032,8 @@ function endNight() {
   state.scareTime = 0;
   state.nightMod = null;
   document.body.classList.remove('night-blood');
-  state.order = null;
+  state.orders = [];
+  state.orderFocus = 0;
   state.pickups = [];
   for (let i = 0; i < world.pickups.length; i++) world.setPickupVisible(i, false);
   for (const z of WORLD.zones) {
@@ -2234,18 +2287,47 @@ function updateStage() {
 /* ============================================================ */
 /* Kundenauftrag & Glücksknäuel                                */
 /* ============================================================ */
-function registerOrderSale(spools) {
-  const order = state.order;
-  if (!order || order.done) return;
-  const res = applySaleToOrder(order, spools);
-  if (res.completed) {
-    const bonus = order.bonus;
-    state.ordersDone++;
-    addMoney(bonus);
-    audio.coin();
-    audio.dawn();
-    ui.toast(`Auftrag erfüllt: ${order.client} zahlt ${formatMoney(bonus)} Bonus.`, 'gold', 6800);
+function activeOrderIndex() {
+  const orders = state.orders || [];
+  const focus = Math.max(0, Math.min(orders.length - 1, state.orderFocus | 0));
+  if (orders[focus] && !orders[focus].done) return focus;
+  return orders.findIndex((o) => o && !o.done);
+}
+
+function cycleOrderFocus() {
+  if (state.mode !== 'playing' || state.phase !== 'day') return;
+  if (session.shopOpen || session.localPaused) return;
+  if (isGuest()) {
+    sendToHost({ t: 'act', kind: 'focus' });
+    return;
   }
+  if (!state.orders || state.orders.filter((o) => o && !o.done).length < 2) return;
+  for (let step = 1; step <= state.orders.length; step++) {
+    const idx = (state.orderFocus + step) % state.orders.length;
+    if (state.orders[idx] && !state.orders[idx].done) {
+      state.orderFocus = idx;
+      audio.click();
+      syncUI();
+      return;
+    }
+  }
+}
+
+function registerOrderSale(spools) {
+  const idx = activeOrderIndex();
+  if (idx < 0) return;
+  const order = state.orders[idx];
+  const res = applySaleToOrder(order, spools);
+  if (!res.completed) return;
+
+  const bonus = order.bonus;
+  state.ordersDone++;
+  addMoney(bonus);
+  audio.coin();
+  audio.dawn();
+  ui.toast(`Auftrag erfüllt: ${order.client} zahlt ${formatMoney(bonus)} Bonus.`, 'gold', 6800);
+  const next = state.orders.findIndex((o) => o && !o.done);
+  if (next >= 0) state.orderFocus = next;
 }
 
 const PICKUP_SPOTS = [
@@ -3398,7 +3480,7 @@ ui.setSoundLabel(!settings.muted);
 ui.setContinueVisible(hasSave());
 
 window.addEventListener('beforeunload', () => {
-  if (state.started && !isCoop()) saveGame();
+  if (state.started && !isGuest()) saveGame();
 });
 
 const params = new URLSearchParams(location.search);
@@ -3410,7 +3492,7 @@ if (params.has('debug')) {
     updateGame, updateGuestGame, updateInteractions, catchPlayer, sellAll,
     finishWinding, gainYarn, buyUpgrade, saveGame, loadRun,
     syncUI, toggleDoor, openShop, closeShop, isProtected,
-    collectPickup, spawnPickups, restorePickups, generateOrder,
+    collectPickup, spawnPickups, restorePickups, generateOrder, generateOrders, cycleOrderFocus,
     applyGuestSnapshot, openGuestShop, closeGuestShop, dawnContinue
   };
 }

@@ -40,11 +40,18 @@ export class UI {
       stageDesc: $('stage-desc'),
       escalationFill: $('escalation-fill'),
       orderPanel: $('order-panel'),
-      orderBonus: $('order-bonus'),
-      orderClient: $('order-client'),
-      orderLine: $('order-line'),
-      orderFill: $('order-fill'),
-      orderProgress: $('order-progress'),
+      orderHint: $('order-hint'),
+      orderCards: [0, 1].map((i) => {
+        const card = $('order-card-' + i);
+        return {
+          card,
+          client: card.querySelector('.order-client'),
+          bonus: card.querySelector('.order-bonus'),
+          line: card.querySelector('.order-line'),
+          fill: card.querySelector('.order-fill'),
+          progress: card.querySelector('.order-progress')
+        };
+      }),
       modPanel: $('mod-panel'),
       modName: $('mod-name'),
       modTag: $('mod-tag'),
@@ -94,6 +101,7 @@ export class UI {
       slotHost: $('slot-host'),
       slotGuest: $('slot-guest'),
       lobbyStart: $('lobby-start'),
+      lobbyContinue: $('lobby-continue'),
       lobbyLeave: $('lobby-leave'),
       hostBtn: $('btn-host'),
       joinBtn: $('btn-join'),
@@ -179,6 +187,9 @@ export class UI {
     this.el.lobbyStart.addEventListener('click', () => {
       if (this.callbacks.onLobbyStart) this.callbacks.onLobbyStart();
     });
+    this.el.lobbyContinue.addEventListener('click', () => {
+      if (this.callbacks.onLobbyContinue) this.callbacks.onLobbyContinue();
+    });
     this.el.lobbyLeave.addEventListener('click', () => {
       if (this.callbacks.onLobbyLeave) this.callbacks.onLobbyLeave();
     });
@@ -237,7 +248,7 @@ export class UI {
     this.el.koopNote.classList.toggle('warn', !!warn);
   }
 
-  showLobby({ code, isHost }) {
+  showLobby({ code, isHost, hasSave, saveDay }) {
     this.el.lobby.classList.remove('hidden');
     this.el.lobbyCode.textContent = code;
     this.el.lobbyHint.textContent = isHost
@@ -249,6 +260,11 @@ export class UI {
     this.el.slotGuest.classList.toggle('ok', !isHost);
     this.el.lobbyStart.classList.toggle('hidden', !isHost);
     this.el.lobbyStart.disabled = true;
+    this.el.lobbyContinue.textContent = saveDay
+      ? `Gespeicherte Schicht · Tag ${saveDay}`
+      : 'Gespeicherte Schicht';
+    this.el.lobbyContinue.classList.toggle('hidden', !isHost || !hasSave);
+    this.el.lobbyContinue.disabled = true;
   }
 
   updateLobby({ isHost, guestConnected }) {
@@ -256,6 +272,7 @@ export class UI {
       this.el.slotGuest.textContent = guestConnected ? 'Verbunden' : 'Wartet auf Beitritt …';
       this.el.slotGuest.classList.toggle('ok', !!guestConnected);
       this.el.lobbyStart.disabled = !guestConnected;
+      this.el.lobbyContinue.disabled = !guestConnected;
     }
   }
 
@@ -369,18 +386,29 @@ export class UI {
       this.el.machineState.classList.toggle('broken', broken);
     }
 
-    const order = state.order;
-    const showOrder = !!order && state.phase !== 'night';
+    const orders = Array.isArray(state.orders) ? state.orders : [];
+    const openOrders = orders.filter((o) => o && !o.done).length;
+    const showOrder = orders.length > 0 && state.phase !== 'night';
     this.el.orderPanel.classList.toggle('hidden', !showOrder);
-    if (order && showOrder) {
-      this.el.orderClient.textContent = order.client;
-      this.el.orderLine.textContent = orderRequirementText(order);
-      this.el.orderBonus.textContent = order.done ? 'ERLEDIGT' : `+ ${formatMoney(order.bonus)}`;
-      this.el.orderProgress.textContent = order.done
-        ? `Bezahlt · ${formatMoney(order.bonus)} Bonus`
-        : orderProgressText(order);
-      this.el.orderFill.style.width = `${Math.max(0, Math.min(1, order.progress / order.target)) * 100}%`;
-      this.el.orderPanel.classList.toggle('done', order.done);
+    if (showOrder) {
+      let focus = Math.max(0, Math.min(orders.length - 1, state.orderFocus | 0));
+      if (!orders[focus] || orders[focus].done) focus = orders.findIndex((o) => o && !o.done);
+      this.el.orderHint.textContent = openOrders > 1 ? 'T WECHSELN' : '';
+      this.el.orderHint.classList.toggle('hidden', openOrders < 2);
+      this.el.orderCards.forEach((c, i) => {
+        const order = orders[i];
+        c.card.classList.toggle('hidden', !order);
+        if (!order) return;
+        c.card.classList.toggle('done', order.done);
+        c.card.classList.toggle('active', !order.done && i === focus && openOrders > 1);
+        c.client.textContent = order.client;
+        c.line.textContent = orderRequirementText(order);
+        c.bonus.textContent = order.done ? 'ERLEDIGT' : `+ ${formatMoney(order.bonus)}`;
+        c.progress.textContent = order.done
+          ? `Bezahlt · ${formatMoney(order.bonus)} Bonus`
+          : orderProgressText(order);
+        c.fill.style.width = `${Math.max(0, Math.min(1, order.progress / order.target)) * 100}%`;
+      });
     }
 
     const mod = state.nightMod ? NIGHT_MODS[state.nightMod] : null;
