@@ -273,13 +273,13 @@ function activeColliders() {
 }
 
 /* Input -------------------------------------------------------- */
-const input = { forward: false, back: false, left: false, right: false, sprint: false };
+const input = { forward: false, back: false, left: false, right: false, sprint: false, jump: false };
 const keys = { e: false };
 let pressE = false;
 let pointerLocked = false;
 
 function resetKeys() {
-  input.forward = input.back = input.left = input.right = input.sprint = false;
+  input.forward = input.back = input.left = input.right = input.sprint = input.jump = false;
   keys.e = false;
   pressE = false;
 }
@@ -307,9 +307,12 @@ window.addEventListener('keydown', (e) => {
     case 'KeyA': case 'ArrowLeft': input.left = true; break;
     case 'KeyD': case 'ArrowRight': input.right = true; break;
     case 'ShiftLeft': case 'ShiftRight': input.sprint = true; break;
+    case 'Space':
+      e.preventDefault();
+      if (!e.repeat) input.jump = true;
+      break;
     default: break;
   }
-  if (e.code === 'Space') e.preventDefault();
 });
 
 window.addEventListener('keyup', (e) => {
@@ -320,6 +323,7 @@ window.addEventListener('keyup', (e) => {
     case 'KeyA': case 'ArrowLeft': input.left = false; break;
     case 'KeyD': case 'ArrowRight': input.right = false; break;
     case 'ShiftLeft': case 'ShiftRight': input.sprint = false; break;
+    case 'Space': input.jump = false; break;
     default: break;
   }
 });
@@ -1182,7 +1186,7 @@ function applyRemoteInput(msg) {
   const bx = WORLD.bounds;
   remote.position.x = Math.max(bx.minX + 0.5, Math.min(bx.maxX - 0.5, Number(msg.x) || 0));
   remote.position.z = Math.max(bx.minZ + 0.5, Math.min(bx.maxZ - 0.5, Number(msg.z) || 0));
-  remote.position.y = 0;
+  remote.position.y = Math.max(0, Math.min(3, Number(msg.y) || 0));
   remote.yaw = Number(msg.yaw) || 0;
   remote.pitch = Number(msg.pitch) || 0;
   remote.stamina = Math.max(0, Math.min(100, Number(msg.stamina) || 0));
@@ -1217,7 +1221,7 @@ function updateRemoteSim(dt) {
   }
 
   if (guestAvatar) {
-    guestAvatar.setTarget(remote.position.x, remote.position.z, remote.yaw, remote.carrying.length > 0);
+    guestAvatar.setTarget(remote.position.x, remote.position.z, remote.yaw, remote.carrying.length > 0, remote.position.y);
     guestAvatar.update(dt);
   }
 }
@@ -1253,7 +1257,7 @@ function buildSnapshot() {
     lore: state.lore,
     endless: state.endless,
     mode: (state.mode === 'shop' || state.mode === 'paused' || state.mode === 'caught') ? 'playing' : state.mode,
-    host: { x: player.position.x, z: player.position.z, yaw: player.yaw, carry: player.carrying.length },
+    host: { x: player.position.x, y: player.position.y, z: player.position.z, yaw: player.yaw, carry: player.carrying.length },
     guestPos: { x: remote.position.x, z: remote.position.z },
     guestCarry: remote.carrying.map((s) => ({ value: s.value, counts: s.counts })),
     doll: { x: doll.position.x, z: doll.position.z, yaw: doll.group.rotation.y },
@@ -1535,7 +1539,7 @@ function applyGuestSnapshot(s) {
   if (typeof s.lightsOut === 'number') world.lightsOut = Math.max(world.lightsOut || 0, s.lightsOut);
   applyGuestPickups(s.pickups);
 
-  if (hostAvatar) hostAvatar.setTarget(s.host.x, s.host.z, s.host.yaw, s.host.carry > 0);
+  if (hostAvatar) hostAvatar.setTarget(s.host.x, s.host.z, s.host.yaw, s.host.carry > 0, s.host.y || 0);
 
   if (s.mode === 'playing' && (state.mode === 'dawn' || state.mode === 'win')) {
     ui.hideDawn();
@@ -1714,6 +1718,7 @@ function updateGuestGame(dt) {
     sendToHost({
       t: 'input',
       x: player.position.x,
+      y: player.position.y,
       z: player.position.z,
       yaw: player.yaw,
       pitch: player.pitch,
@@ -1929,6 +1934,7 @@ function openGuestShop() {
 function closeGuestShop(relock = true) {
   if (!session.shopOpen) return;
   session.shopOpen = false;
+  resetKeys();
   ui.closeShop();
   audio.uiClose();
   if (relock) lockPointer();
@@ -2944,6 +2950,7 @@ function closeShop() {
   if (state.mode !== 'shop') return;
   ui.closeShop();
   state.mode = 'playing';
+  resetKeys();
   audio.uiClose();
   lockPointer();
 }
@@ -3054,12 +3061,14 @@ function resumeGame() {
   if (isCoop()) {
     if (!session.localPaused) return;
     session.localPaused = false;
+    resetKeys();
     ui.hidePause();
     audio.uiClose();
     lockPointer();
     return;
   }
   if (state.mode !== 'paused') return;
+  resetKeys();
   ui.hidePause();
   state.mode = 'playing';
   audio.uiClose();
@@ -3340,7 +3349,7 @@ function catchRemotePlayer() {
 /* ============================================================ */
 /* Frame update                                                 */
 /* ============================================================ */
-const ZERO_INPUT = { forward: false, back: false, left: false, right: false, sprint: false };
+const ZERO_INPUT = { forward: false, back: false, left: false, right: false, sprint: false, jump: false };
 let uiTimer = 0;
 
 function updateGame(dt) {

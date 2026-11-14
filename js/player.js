@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { WORLD, resolveCircle } from './world.js';
 
+const GRAVITY = 26;
+const JUMP_SPEED = 7.4;
+const JUMP_BUFFER_TIME = 0.14;
+const COYOTE_TIME = 0.12;
+
 function spoolModel(color = 0xd8cfc0) {
   const g = new THREE.Group();
   const yarn = new THREE.Mesh(
@@ -41,6 +46,13 @@ export class Player {
     this.invulnerable = 0;
     this.lastSafe = false;
     this.motionScale = 1;
+    this.vy = 0;
+    this.grounded = true;
+    this.coyote = 0;
+    this.jumpBuffer = 0;
+    this.jumpHeld = false;
+    this.landDip = 0;
+    this.cameraY = this.eyeHeight;
 
     this.camera.rotation.order = 'YXZ';
 
@@ -73,6 +85,13 @@ export class Player {
   reset(pos = WORLD.spawn) {
     this.position.copy(pos);
     this.velocity.set(0, 0, 0);
+    this.vy = 0;
+    this.grounded = true;
+    this.coyote = 0;
+    this.jumpBuffer = 0;
+    this.jumpHeld = false;
+    this.landDip = 0;
+    this.cameraY = this.position.y + this.eyeHeight;
     this.pitch = 0;
     this.bob = 0;
   }
@@ -96,6 +115,40 @@ export class Player {
     if (this.invulnerable > 0) this.invulnerable -= dt;
 
     const moving = input.forward || input.back || input.left || input.right;
+
+    // jump input: buffered press + coyote time for forgiving physics
+    if (input.jump && !this.jumpHeld) this.jumpBuffer = JUMP_BUFFER_TIME;
+    if (!input.jump && this.jumpHeld && this.vy > 0) this.vy *= 0.55;
+    this.jumpHeld = !!input.jump;
+    this.jumpBuffer = Math.max(0, this.jumpBuffer - dt);
+    this.coyote = this.grounded ? COYOTE_TIME : Math.max(0, this.coyote - dt);
+
+    if (this.jumpBuffer > 0 && this.coyote > 0) {
+      this.vy = JUMP_SPEED;
+      this.grounded = false;
+      this.coyote = 0;
+      this.jumpBuffer = 0;
+      this.landDip = 0;
+    }
+
+    if (!this.grounded) {
+      const fallSpeed = this.vy;
+      const gravity = this.vy > 0 ? GRAVITY : GRAVITY * 1.15;
+      this.vy -= gravity * dt;
+      this.position.y += this.vy * dt;
+      if (this.position.y <= 0) {
+        const impact = Math.min(1, Math.abs(fallSpeed) / 8);
+        this.position.y = 0;
+        this.vy = 0;
+        this.grounded = true;
+        this.landDip = 0.055 + impact * 0.1;
+        this.addShake(0.04 * impact, 0.16);
+        if (onStep) onStep(false);
+      }
+    } else {
+      this.position.y = 0;
+    }
+    this.landDip *= Math.exp(-dt * 9);
 
     // sprint / stamina
     const wantSprint = input.sprint && moving && this.stamina > 2 && state.phase !== 'shop';
@@ -122,7 +175,7 @@ export class Player {
 
     const targetVx = dx * moveSpeed;
     const targetVz = dz * moveSpeed;
-    const accel = 12;
+    const accel = this.grounded ? 12 : 3.4;
     this.velocity.x += (targetVx - this.velocity.x) * Math.min(1, dt * accel);
     this.velocity.z += (targetVz - this.velocity.z) * Math.min(1, dt * accel);
 
@@ -133,7 +186,7 @@ export class Player {
     this.speed = Math.hypot(this.velocity.x, this.velocity.z);
 
     // bob & footsteps
-    if (this.speed > 0.6) {
+    if (this.speed > 0.6 && this.grounded) {
       this.bob += dt * (this.sprinting ? 13 : 9);
       this.bobAmount += ((this.sprinting ? 0.07 : 0.04) - this.bobAmount) * Math.min(1, dt * 8);
       this.stepTimer -= dt * this.speed / 4.35;
@@ -164,9 +217,11 @@ export class Player {
       sy = (Math.random() - 0.5) * this.shake * m;
       sz = (Math.random() - 0.5) * this.shake * 0.6 * m;
     }
+    const eyeTarget = this.position.y + this.eyeHeight;
+    this.cameraY += (eyeTarget - this.cameraY) * Math.min(1, dt * 22);
     this.camera.position.set(
       this.position.x + bobX + sx,
-      this.position.y + this.eyeHeight + bobY + sy,
+      this.cameraY + bobY + sy - this.landDip,
       this.position.z + sz
     );
     this.camera.rotation.set(this.pitch, this.yaw, Math.sin(this.bob * 0.5) * this.bobAmount * 0.25 * m);

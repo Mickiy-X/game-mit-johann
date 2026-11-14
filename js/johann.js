@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { WORLD, resolveCircle, navWaypoint } from './world.js';
 import { nameTexture } from './textures.js';
+import { buildWorkerFigure } from './figure.js';
 
 const LINES_DAY = [
   'Johann: Ich hab das Gefühl, sie wird jede Stunde größer.',
@@ -59,6 +60,7 @@ export class Johann {
     this.target = new THREE.Vector3();
     this.moving = false;
     this.walkPhase = 0;
+    this.idleTime = 0;
     this.caughtTimer = 0;
     this.doorBusy = false;
     this.locked = false;
@@ -68,102 +70,27 @@ export class Johann {
   build() {
     this.group = new THREE.Group();
     this.group.position.copy(this.position);
-    const skin = new THREE.MeshStandardMaterial({ color: 0xd6a37e, roughness: 0.8 });
-    const overall = new THREE.MeshStandardMaterial({ color: 0x2f4e73, roughness: 0.85 });
-    const shirt = new THREE.MeshStandardMaterial({ color: 0xb7a98f, roughness: 0.9 });
-    const capMat = new THREE.MeshStandardMaterial({ color: 0xc9a536, roughness: 0.7 });
-    const boot = new THREE.MeshStandardMaterial({ color: 0x2a2521, roughness: 0.9 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x0d0d0d, roughness: 0.6 });
 
-    const body = new THREE.Group();
-    body.position.y = 0;
-    this.group.add(body);
-    this.body = body;
-
-    // legs
-    this.legL = new THREE.Group();
-    this.legL.position.set(-0.16, 0.82, 0);
-    const legMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.8, 8), overall);
-    legMesh.position.y = -0.4;
-    this.legL.add(legMesh);
-    const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.13, 0.36), boot);
-    shoeL.position.set(0, -0.83, 0.07);
-    this.legL.add(shoeL);
-    body.add(this.legL);
-    this.legR = new THREE.Group();
-    this.legR.position.set(0.16, 0.82, 0);
-    const legMesh2 = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.8, 8), overall);
-    legMesh2.position.y = -0.4;
-    this.legR.add(legMesh2);
-    const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.13, 0.36), boot);
-    shoeR.position.set(0, -0.83, 0.07);
-    this.legR.add(shoeR);
-    body.add(this.legR);
-
-    // torso
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.85, 12), shirt);
-    torso.position.y = 1.2;
-    torso.castShadow = true;
-    body.add(torso);
-    const overalls = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.58, 0.38), overall);
-    overalls.position.set(0, 1.06, 0.02);
-    body.add(overalls);
-    for (const sx of [-0.17, 0.17]) {
-      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.04), overall);
-      strap.position.set(sx, 1.42, 0.27);
-      strap.rotation.x = -0.1;
-      body.add(strap);
-    }
-    const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.03), dark);
-    pocket.position.set(0, 1.18, 0.28);
-    body.add(pocket);
-
-    // arms
-    this.armL = new THREE.Group();
-    this.armL.position.set(-0.36, 1.55, 0);
-    const aL = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.72, 8), shirt);
-    aL.position.y = -0.36;
-    this.armL.add(aL);
-    const handL = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), skin);
-    handL.position.y = -0.78;
-    this.armL.add(handL);
-    body.add(this.armL);
-    this.armR = new THREE.Group();
-    this.armR.position.set(0.36, 1.55, 0);
-    const aR = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.72, 8), shirt);
-    aR.position.y = -0.36;
-    this.armR.add(aR);
-    const handR = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), skin);
-    handR.position.y = -0.78;
-    this.armR.add(handR);
-    body.add(this.armR);
-
-    // head
-    this.head = new THREE.Group();
-    this.head.position.y = 1.93;
-    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.29, 16, 12), skin);
-    headMesh.scale.set(1, 1.08, 0.95);
-    headMesh.castShadow = true;
-    this.head.add(headMesh);
-    for (const sx of [-0.1, 0.1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), dark);
-      eye.position.set(sx, 0.03, 0.26);
-      this.head.add(eye);
-    }
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, 0.05), dark);
-    brow.position.set(0, 0.25, 0.23);
-    this.head.add(brow);
-    const capTop = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), capMat);
-    capTop.position.y = 0.13;
-    this.head.add(capTop);
-    const brim = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.04, 0.2), capMat);
-    brim.position.set(0, 0.16, 0.27);
-    this.head.add(brim);
-    body.add(this.head);
+    const figure = buildWorkerFigure({
+      skin: 0xd6a37e,
+      shirt: 0xb7a98f,
+      overall: 0x2f4e73,
+      cap: 0xc9a536,
+      boot: 0x2a2521,
+      hair: 0x4a3524
+    });
+    this.figure = figure;
+    this.body = figure.body;
+    this.head = figure.head;
+    this.legL = figure.legL;
+    this.legR = figure.legR;
+    this.armL = figure.armL;
+    this.armR = figure.armR;
+    this.group.add(figure.root);
 
     // name tag
     this.nameSprite = makeNameSprite();
-    this.nameSprite.position.set(0, 2.55, 0);
+    this.nameSprite.position.set(0, 2.08, 0);
     this.group.add(this.nameSprite);
 
     // carried spool
@@ -176,12 +103,11 @@ export class Johann {
       cap.position.y = y;
       this.spoolCarry.add(cap);
     }
-    this.spoolCarry.position.set(0.35, 1.1, 0.35);
+    this.spoolCarry.position.set(0.34, 1.12, 0.32);
     this.spoolCarry.rotation.z = Math.PI / 2;
     this.spoolCarry.visible = false;
     this.group.add(this.spoolCarry);
 
-    this.group.traverse(o => { if (o.isMesh) o.castShadow = true; });
     this.scene.add(this.group);
   }
 
@@ -276,7 +202,9 @@ export class Johann {
     const armSwing = this.state === 'pull' ? -1.1 : (this.moving ? -walk * 0.45 : 0);
     this.armL.rotation.x += (armSwing - this.armL.rotation.x) * lerp;
     this.armR.rotation.x += ((this.state === 'pull' ? -0.8 : this.moving ? walk * 0.45 : 0) - this.armR.rotation.x) * lerp;
-    this.body.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.02;
+    this.idleTime += dt;
+    const breathe = this.moving ? 0 : Math.sin(this.idleTime * 1.7) * 0.006;
+    this.body.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.02 + breathe;
     this.spoolCarry.visible = this.carryValue > 0 && (this.state === 'toSell' || this.state === 'sell');
     if (this.spoolCarry.visible) this.spoolCarry.rotation.x += dt * 2;
   }
