@@ -605,9 +605,12 @@ export class UI {
       const locked = def.requires && state.upgrades[def.requires] === 0;
       const cost = maxed ? null : def.costs[Math.min(lvl, def.costs.length - 1)];
       const canAfford = cost !== null && state.money >= cost;
+      const affordable = !maxed && !locked && canAfford;
       const card = document.createElement('div');
-      card.className = `upgrade-card${maxed ? ' maxed' : ''}${lvl > 0 ? ' owned' : ''}${defRank >= 3 ? ' high-tier' : ''}`;
+      card.className = `upgrade-card${maxed ? ' maxed' : ''}${lvl > 0 ? ' owned' : ''}${defRank >= 3 ? ' high-tier' : ''}${affordable ? ' affordable' : ''}`;
       const rankTag = defRank > 1 ? `RANG ${ROMAN[defRank - 1]} · ` : '';
+      const nextEffect = maxed ? null : def.effect(lvl + 1);
+      const reqName = def.requires ? (UPGRADES[def.requires]?.name || def.requires) : '';
       let btnLabel;
       if (maxed) btnLabel = 'MAXIMUM';
       else if (locked) btnLabel = 'GESPERRT';
@@ -620,7 +623,8 @@ export class UI {
         </div>
         <div class="upgrade-desc">${def.desc}</div>
         <div class="upgrade-effect${id === 'auto' ? ' warn' : ''}">${def.effect(lvl)}</div>
-        ${locked ? '<div class="upgrade-effect warn">Benötigt: Automatik-Spinner</div>' : ''}
+        ${nextEffect ? `<div class="upgrade-next"><span>STUFE ${lvl + 1}</span>${nextEffect}</div>` : ''}
+        ${locked ? `<div class="upgrade-effect warn">Benötigt: ${reqName}</div>` : ''}
         <button class="upgrade-buy" data-id="${id}" ${maxed || locked || !canAfford ? 'disabled' : ''}>${btnLabel}</button>
       `;
       grid.appendChild(card);

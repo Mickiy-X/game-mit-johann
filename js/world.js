@@ -495,22 +495,26 @@ export function buildWorld(scene) {
   doorFrame('z', -8, 13.5, 3.2);
   openDoorLeaf('z', -8, 13.5, 3.2, -1, 0x3d4550);
 
-  // door signs
-  function hangingSign(text, sub, x, y, z, col = '#c79a2f', ry = 0) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(2.25, 1.1), new THREE.MeshBasicMaterial({
-      map: signTexture(text, sub, col), side: THREE.DoubleSide
-    }));
-    s.position.set(x, y, z);
-    s.rotation.y = ry;
-    room.add(s);
-    return s;
+  // double-faced plaque: both faces carry a correctly oriented texture
+  function signPlaque(text, sub, col, w = 2.25, h = 1.05, bg) {
+    return makeSignPlaque(M, text, sub, col, w, h, bg);
   }
-  hangingSign('MASCHINEN', 'WESTFLÜGEL', -8, 9.15, -15, '#c79a2f', Math.PI / 2);
-  hangingSign('LAGER', 'GARN & WERKZEUG', -8, 9.15, -2, '#9be27a', Math.PI / 2);
-  hangingSign('SPULEN', 'WICKELN & VERKAUF', -8, 9.15, 14.5, '#e0a05a', Math.PI / 2);
-  hangingSign('MASCHINEN', 'OSTFLÜGEL', 8, 9.15, -15, '#c79a2f', Math.PI / 2);
-  hangingSign('LAGER', 'KATALOG', 8, 9.15, -2, '#7bc4ff', Math.PI / 2);
-  hangingSign('SAFE ROOM', 'NUR BEI GESCHLOSSENER TÜR', 8, 4.35, 14.6, '#9be27a', Math.PI / 2);
+
+  // one plaque on each side of the 0.45 m hall wall
+  function wallPlaque(text, sub, x, y, z, col, w = 2.25, h = 1.05) {
+    for (const side of [-1, 1]) {
+      const p = signPlaque(text, sub, col, w, h);
+      p.position.set(x + side * 0.275, y, z);
+      p.rotation.y = side * Math.PI / 2;
+      room.add(p);
+    }
+  }
+
+  wallPlaque('MASCHINEN', 'WESTFLÜGEL', -8, 9.15, -15, '#c79a2f');
+  wallPlaque('LAGER', 'GARN & WERKZEUG', -8, 9.15, -2, '#9be27a');
+  wallPlaque('SPULEN', 'WICKELN & VERKAUF', -8, 9.15, 14.5, '#e0a05a');
+  wallPlaque('MASCHINEN', 'OSTFLÜGEL', 8, 9.15, -15, '#c79a2f');
+  wallPlaque('LAGER', 'KATALOG', 8, 9.15, -2, '#7bc4ff');
 
   /* ---------------- Safe room ---------------- */
   const safe = WORLD.safe;
@@ -551,12 +555,7 @@ export function buildWorld(scene) {
   }
   world.doorPivot = doorPivot;
 
-  const srSign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.3), new THREE.MeshBasicMaterial({
-    map: signTexture('SAFE ROOM', 'NUR BEI GESCHLOSSENER TÜR', '#9be27a', '#101512'), side: THREE.DoubleSide
-  }));
-  srSign.rotation.y = -Math.PI / 2;
-  srSign.position.set(7.72, 4.4, 14.6);
-  room.add(srSign);
+  wallPlaque('SAFE ROOM', 'NUR BEI GESCHLOSSENER TÜR', 8, 4.55, 17.5, '#9be27a', 2.5, 1.05);
 
   // safe light
   const safeLight = new THREE.PointLight(0xffc98f, 26, 13, 1.3);
@@ -663,11 +662,8 @@ export function buildWorld(scene) {
   world.monitorTex = monTex;
   world.anim.monitor = monScreen;
 
-  const safeSubSign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.05), new THREE.MeshBasicMaterial({
-    map: signTexture('VERRIEGELN', 'SIE HÖRT DEN LÄRM', '#9be27a', '#141a15'), side: THREE.DoubleSide
-  }));
-  safeSubSign.rotation.y = -Math.PI / 2;
-  safeSubSign.position.set(16.9, 3.2, 14.6);
+  const safeSubSign = signPlaque('VERRIEGELN', 'SIE HÖRT DEN LÄRM', '#9be27a', 2.4, 0.95, '#141a15');
+  safeSubSign.position.set(12.6, 3.35, 8.29);
   room.add(safeSubSign);
 
   /* ---------------- Pedestal & hall dressing ---------------- */
@@ -1019,11 +1015,6 @@ export function buildWorld(scene) {
   buildSpinner(room, M, world, WORLD.spinner.x, WORLD.spinner.z);
   buildLadder(room, M, world);
 
-  hangingSign('WICKLER', 'FADEN AUFSPULEN', -11.4, 3.5, 13.7, '#c79a2f', Math.PI / 2);
-  hangingSign('VERKAUF', 'SPULEN GEGEN BAR', -11.4, 3.6, 18.9, '#9be27a', Math.PI / 2);
-  hangingSign('KATALOG', 'UPGRADES', 12.4, 3.3, -1.2, '#7bc4ff', Math.PI / 2);
-  hangingSign('SPINNER', 'AUTO-BETRIEB', -13.2, 3.6, -13.0, '#c79a2f', Math.PI / 2);
-
   /* ---------------- Dust ---------------- */
   const dustGeo = new THREE.BufferGeometry();
   const N = 480;
@@ -1232,6 +1223,28 @@ export function buildWorld(scene) {
 }
 
 /* ============================================================ */
+function makeSignPlaque(M, text, sub, col, w = 2.25, h = 1.05, bg) {
+  const g = new THREE.Group();
+  const tex = signTexture(text, sub, col, bg);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w + 0.14, h + 0.14, 0.07), M.metalDark);
+  body.castShadow = true;
+  g.add(body);
+  for (const s of [1, -1]) {
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    face.position.z = s * 0.037;
+    if (s < 0) face.rotation.y = Math.PI;
+    g.add(face);
+  }
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.11, 6), M.metal);
+    bolt.rotation.x = Math.PI / 2;
+    bolt.position.set(sx * (w / 2 + 0.05), sy * (h / 2 + 0.05), 0);
+    g.add(bolt);
+  }
+  return g;
+}
+
 function makeSpoolMesh(r, h, mat) {
   const g = new THREE.Group();
   const core = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.55, h, 12), new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 0.9 }));
@@ -1287,6 +1300,15 @@ function buildWinder(room, M, world, x, z, rotY = 0) {
     s.rotation.z = Math.PI / 2;
     g.add(s);
   }
+  // sign frame mounted on the work table
+  for (const dx of [-0.95, 0.95]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.5, 6), M.metalDark);
+    post.position.set(dx, 1.82, -0.5);
+    g.add(post);
+  }
+  const wickSign = makeSignPlaque(M, 'WICKLER', 'FADEN AUFSPULEN', '#c79a2f', 1.9, 0.72);
+  wickSign.position.set(0, 2.4, -0.5);
+  g.add(wickSign);
   room.add(g);
   const halfX = Math.abs(Math.sin(rotY)) > 0.7 ? 0.75 : 1.5;
   const halfZ = Math.abs(Math.sin(rotY)) > 0.7 ? 1.5 : 0.75;
@@ -1299,90 +1321,241 @@ function buildSellStation(room, M, world, x, z, rotY = 0) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
   g.rotation.y = rotY;
-  const counter = new THREE.Mesh(new THREE.BoxGeometry(2.9, 1.1, 1.2), M.wood);
-  counter.position.y = 0.55;
+
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(2.9, 1.02, 1.2), M.wood);
+  counter.position.y = 0.51;
   counter.castShadow = true;
+  counter.receiveShadow = true;
   g.add(counter);
-  const top = new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.08, 1.35), M.metalDark);
-  top.position.y = 1.14;
+  const frontPanel = new THREE.Mesh(new THREE.BoxGeometry(2.94, 0.8, 0.08), M.metalDark);
+  frontPanel.position.set(0, 0.5, 0.61);
+  g.add(frontPanel);
+  const kick = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.18, 1.1), M.metalDark);
+  kick.position.y = 0.09;
+  g.add(kick);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(3.05, 0.08, 1.35), M.metal);
+  top.position.y = 1.06;
+  top.castShadow = true;
   g.add(top);
-  for (let i = 0; i < 7; i++) {
-    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 5), M.metal);
-    bar.position.set(-1.2 + i * 0.4, 1.75, -0.45);
-    g.add(bar);
-  }
+
+  // cash register with keys
   const cash = new THREE.Group();
-  const cashBody = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.32, 0.45), M.metalDark);
-  cashBody.position.y = 1.35;
+  const cashBody = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.34, 0.46), M.metalDark);
   cash.add(cashBody);
-  const cashScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.16), new THREE.MeshBasicMaterial({ color: 0x7ef29a }));
-  cashScreen.position.set(0, 1.4, 0.23);
+  const cashScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.2), new THREE.MeshBasicMaterial({ color: 0x11331f }));
+  cashScreen.position.set(0, 0.09, 0.235);
+  cashScreen.rotation.x = -0.24;
   cash.add(cashScreen);
-  cash.position.set(0.9, 0, 0.1);
+  const cashGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.045), M.emissive(0x7ef29a, 1.4));
+  cashGlow.position.set(0, 0.05, 0.24);
+  cash.add(cashGlow);
+  for (let i = 0; i < 6; i++) {
+    const key = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.05), M.metal);
+    key.position.set(-0.18 + (i % 3) * 0.09, 0.19, 0.1 - Math.floor(i / 3) * 0.1);
+    cash.add(key);
+  }
+  cash.position.set(0.95, 1.27, 0.1);
   g.add(cash);
-  const scale = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.5), M.metal);
-  scale.position.set(-0.7, 1.22, 0.1);
-  g.add(scale);
+
+  // scale and sample spool
+  const scaleBase = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.09, 0.45), M.metalDark);
+  scaleBase.position.set(-0.75, 1.15, 0.12);
+  g.add(scaleBase);
+  const scaleTray = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.04, 14), M.metal);
+  scaleTray.position.set(-0.75, 1.22, 0.12);
+  g.add(scaleTray);
+  const sampleSpool = makeSpoolMesh(0.11, 0.2, M.yarnRed);
+  sampleSpool.position.set(-0.75, 1.33, 0.12);
+  g.add(sampleSpool);
+
+  // basket of loose spools
   const basket = new THREE.Group();
   for (const [dx, dz] of [[-0.2, -0.15], [0.2, -0.15], [-0.2, 0.15], [0.2, 0.15]]) {
     const s = makeSpoolMesh(0.14, 0.24, M.yarnWhite);
     s.position.set(dx, 0.15, dz);
     basket.add(s);
   }
-  basket.position.set(-0.7, 1.25, 0.15);
+  const basketRim = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.3, 0.16, 14, 1, true),
+    new THREE.MeshStandardMaterial({ color: 0x4d3d2c, roughness: 0.9, side: THREE.DoubleSide }));
+  basket.position.set(-0.05, 1.11, 0.28);
+  basket.add(basketRim);
   g.add(basket);
   world.anim.sellBasket = basket;
-  // price board
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), new THREE.MeshBasicMaterial({
-    map: signTexture('PREISLISTE', 'WEISS 1 · ROT 2,5 · SCHWARZ 6 · GOLD 18', '#e0c07a', '#131614'), side: THREE.DoubleSide
-  }));
-  board.position.set(0, 2.1, -0.6);
-  g.add(board);
+
+  // floor crate with stock
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.62, 0.72), M.wood);
+  crate.position.set(-1.9, 0.31, 0.55);
+  crate.castShadow = true;
+  g.add(crate);
+  for (let i = 0; i < 3; i++) {
+    const s = makeSpoolMesh(0.13, 0.22, i === 1 ? M.yarnGold : M.yarnWhite);
+    s.position.set(-2.11 + i * 0.21, 0.7, 0.55);
+    g.add(s);
+  }
+
+  // stock shelf behind the counter (kept low so the price board stays visible from behind)
+  const rack = new THREE.Group();
+  const back = new THREE.Mesh(new THREE.BoxGeometry(2.9, 1.7, 0.1), M.wood);
+  back.position.y = 1.15;
+  back.castShadow = true;
+  rack.add(back);
+  for (const sx of [-1.4, 1.4]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.0, 0.36), M.wood);
+    leg.position.set(sx, 1.0, 0.12);
+    rack.add(leg);
+  }
+  for (const sy of [0.45, 1.0, 1.55]) {
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.07, 0.36), M.wood);
+    shelf.position.set(0, sy, 0.2);
+    rack.add(shelf);
+  }
+  const stockMats = [M.yarnWhite, M.yarnRed, M.yarnGold];
+  for (let row = 0; row < 3; row++) {
+    for (let i = 0; i < 5; i++) {
+      const s = makeSpoolMesh(0.12, 0.2, stockMats[(row + i) % 3]);
+      s.position.set(-1.16 + i * 0.58, 0.56 + row * 0.55, 0.2);
+      rack.add(s);
+    }
+  }
+  rack.position.set(0, 0, -1.05);
+  g.add(rack);
+
+  // counter-mounted sign frame: header + price list, readable both ways
+  for (const dx of [-1.28, 1.28]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.2, 6), M.metalDark);
+    post.position.set(dx, 2.2, -0.55);
+    g.add(post);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.06, 8), M.metal);
+    foot.position.set(dx, 1.11, -0.55);
+    g.add(foot);
+  }
+  const headerBoard = makeSignPlaque(M, 'VERKAUF', 'SPULEN GEGEN BAR', '#f0d79a', 2.6, 0.6, '#20221c');
+  headerBoard.position.set(0, 2.95, -0.55);
+  g.add(headerBoard);
+  const priceBoard = makeSignPlaque(M, 'PREISLISTE', 'WEISS 1 · ROT 2,5 · SCHWARZ 6 · GOLD 18', '#e0c07a', 2.4, 0.6, '#131614');
+  priceBoard.position.set(0, 2.35, -0.55);
+  g.add(priceBoard);
+
   room.add(g);
   const halfX = Math.abs(Math.sin(rotY)) > 0.7 ? 0.72 : 1.55;
   const halfZ = Math.abs(Math.sin(rotY)) > 0.7 ? 1.55 : 0.72;
   world.colliders.props.push({ minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ });
+  if (Math.abs(Math.sin(rotY)) > 0.7) {
+    world.colliders.props.push({ minX: x - 1.3, maxX: x - 0.55, minZ: z - 1.5, maxZ: z + 1.5 });
+    world.colliders.props.push({ minX: x + 0.05, maxX: x + 1.05, minZ: z + 1.5, maxZ: z + 2.3 });
+  }
 }
 
 function buildShopTerminal(room, M, world, x, z, rotY = 0) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
   g.rotation.y = rotY;
-  const desk = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.05, 0.8), M.metalDark);
-  desk.position.y = 0.52;
+
+  // kiosk desk
+  const desk = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.0, 0.9), M.metalDark);
+  desk.position.y = 0.5;
   desk.castShadow = true;
+  desk.receiveShadow = true;
   g.add(desk);
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.7, 8), M.metal);
-  post.position.y = 1.4;
-  g.add(post);
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.66), new THREE.MeshBasicMaterial({ color: 0x183247 }));
-  screen.position.set(0, 1.85, 0.05);
-  screen.rotation.x = -0.1;
-  g.add(screen);
+  const deskTop = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.07, 1.0), M.metal);
+  deskTop.position.y = 1.03;
+  g.add(deskTop);
+  for (const sx of [-0.92, 0.92]) {
+    const side = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.98, 0.84), M.wood);
+    side.position.set(sx, 0.49, 0);
+    g.add(side);
+  }
+  const underShelf = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 0.72), M.wood);
+  underShelf.position.set(0, 0.32, 0);
+  g.add(underShelf);
+
+  // angled monitor
+  const monitorCase = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.82, 0.12), M.metalDark);
+  monitorCase.position.set(0, 1.58, -0.12);
+  monitorCase.rotation.x = -0.12;
+  g.add(monitorCase);
+  const monitorStand = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.14, 0.22), M.metalDark);
+  monitorStand.position.set(0, 1.11, -0.1);
+  g.add(monitorStand);
   const c = document.createElement('canvas');
-  c.width = 256; c.height = 160;
+  c.width = 512; c.height = 320;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#08141d'; ctx.fillRect(0, 0, 256, 160);
-  ctx.fillStyle = '#7bc4ff'; ctx.font = 'bold 18px Consolas, monospace'; ctx.fillText('FABRIK-KATALOG', 20, 34);
-  ctx.strokeStyle = 'rgba(123,196,255,0.35)'; ctx.strokeRect(16, 48, 224, 30); ctx.strokeRect(16, 86, 224, 30); ctx.strokeRect(16, 124, 224, 22);
-  ctx.fillStyle = 'rgba(123,196,255,0.3)';
-  ctx.fillRect(24, 58, 120, 8); ctx.fillRect(24, 96, 150, 8); ctx.fillRect(24, 132, 80, 6);
+  ctx.fillStyle = '#071019'; ctx.fillRect(0, 0, 512, 320);
+  ctx.fillStyle = '#0d2233'; ctx.fillRect(0, 0, 512, 46);
+  ctx.fillStyle = '#7bc4ff'; ctx.font = 'bold 28px Consolas, monospace';
+  ctx.fillText('FABRIK-KATALOG', 22, 34);
+  ctx.fillStyle = 'rgba(123,196,255,0.7)'; ctx.font = '16px Consolas, monospace';
+  ctx.textAlign = 'right'; ctx.fillText('LIEFERUNG SOFORT', 490, 32); ctx.textAlign = 'left';
+  const rows = [
+    ['01  SPULENGRÖSSE', '130'],
+    ['02  ZIEHTECHNIK', '160'],
+    ['03  WICKELMASCHINE', '180'],
+    ['04  SICHERHEITSTÜR', '320'],
+    ['05  AUTOMATIK-SPINNER', '520']
+  ];
+  rows.forEach(([label, price], i) => {
+    const y = 78 + i * 40;
+    ctx.fillStyle = i === 0 ? 'rgba(123,196,255,0.16)' : (i % 2 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0)');
+    ctx.fillRect(16, y - 24, 480, 34);
+    ctx.fillStyle = i === 0 ? '#bde4ff' : 'rgba(190,215,230,0.72)';
+    ctx.font = 'bold 19px Consolas, monospace';
+    ctx.fillText(label, 26, y);
+    ctx.fillStyle = '#e0c07a';
+    ctx.textAlign = 'right'; ctx.fillText(`${price} €`, 470, y); ctx.textAlign = 'left';
+    if (i === 0) { ctx.fillStyle = '#7ef29a'; ctx.fillText('>', 6, y); }
+  });
+  ctx.fillStyle = 'rgba(123,196,255,0.35)'; ctx.fillRect(16, 274, 480, 1);
+  ctx.fillStyle = 'rgba(220,235,245,0.6)'; ctx.font = '16px Consolas, monospace';
+  ctx.fillText('B  KATALOG ÖFFNEN · NUR TAGPHASE', 26, 302);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  screen.material = new THREE.MeshBasicMaterial({ map: t });
-  // small shelf with sample spools
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.16, 0.7),
+    new THREE.MeshBasicMaterial({ map: t, toneMapped: false }));
+  screen.position.set(0, 1.58, -0.05);
+  screen.rotation.x = -0.12;
+  g.add(screen);
+  const screenGlow = new THREE.PointLight(0x7bc4ff, 4.5, 5.5, 1.8);
+  screenGlow.position.set(0, 1.7, 0.65);
+  g.add(screenGlow);
+
+  // sample shelf on the desk
+  const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.06, 0.34), M.wood);
+  shelf.position.set(0, 1.12, 0.28);
+  g.add(shelf);
   for (let i = 0; i < 3; i++) {
-    const s = makeSpoolMesh(0.11, 0.2, i === 0 ? M.yarnGold : (i === 1 ? M.yarnRed : M.yarnWhite));
-    s.position.set(-0.62 + i * 0.3, 1.18, 0.5);
+    const s = makeSpoolMesh(0.1, 0.18, i === 0 ? M.yarnGold : (i === 1 ? M.yarnRed : M.yarnWhite));
+    s.position.set(-0.34 + i * 0.34, 1.24, 0.28);
     g.add(s);
   }
-  // little sign lamp
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), M.emissive(0x7bc4ff, 1.5));
-  lamp.position.set(0.7, 2.2, 0.1);
+  // brochure stack
+  const brochures = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.3), M.yarnWhite);
+  brochures.position.set(0.66, 1.1, 0.25);
+  brochures.rotation.y = 0.2;
+  g.add(brochures);
+
+  // mounted catalog sign above the kiosk
+  for (const sx of [-0.82, 0.82]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.95, 6), M.metalDark);
+    post.position.set(sx, 2.04, -0.32);
+    g.add(post);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 0.06, 8), M.metal);
+    foot.position.set(sx, 1.08, -0.32);
+    g.add(foot);
+  }
+  const catSign = makeSignPlaque(M, 'KATALOG', 'UPGRADES · TAGPHASE', '#7bc4ff', 2.05, 0.56, '#101a22');
+  catSign.position.set(0, 2.68, -0.32);
+  g.add(catSign);
+  // indicator lamp mounted on the sign frame
+  const lampArm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.32, 6), M.metal);
+  lampArm.position.set(0.82, 2.9, -0.32);
+  g.add(lampArm);
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), M.emissive(0x7bc4ff, 1.8));
+  lamp.position.set(0.82, 3.08, -0.32);
   g.add(lamp);
+
   room.add(g);
-  const halfX = Math.abs(Math.sin(rotY)) > 0.7 ? 0.48 : 0.95;
-  const halfZ = Math.abs(Math.sin(rotY)) > 0.7 ? 0.95 : 0.48;
+  const halfX = Math.abs(Math.sin(rotY)) > 0.7 ? 0.52 : 1.1;
+  const halfZ = Math.abs(Math.sin(rotY)) > 0.7 ? 1.1 : 0.52;
   world.colliders.props.push({ minX: x - halfX, maxX: x + halfX, minZ: z - halfZ, maxZ: z + halfZ });
 }
 
@@ -1418,8 +1591,13 @@ function buildSpinner(room, M, world, x, z) {
   const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 2.6, 10), M.rust);
   pipe.position.set(-1.3, 1.6, -0.2);
   g.add(pipe);
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.85), new THREE.MeshBasicMaterial({ map: signTexture('AUTO\nSPINNER', 'LÄRMFAKTOR HOCH', '#c79a2f', '#141615') }));
-  sign.position.set(0, 2.45, 0.62);
+  for (const sx of [-0.7, 0.7]) {
+    const signPost = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.85, 6), M.metalDark);
+    signPost.position.set(sx, 2.58, 0.2);
+    g.add(signPost);
+  }
+  const sign = makeSignPlaque(M, 'AUTO\nSPINNER', 'LÄRMFAKTOR HOCH', '#c79a2f', 1.7, 0.72, '#141615');
+  sign.position.set(0, 2.55, 0.2);
   g.add(sign);
   room.add(g);
 
