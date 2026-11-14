@@ -1,9 +1,10 @@
-import { UPGRADES, UPGRADE_ORDER, formatMoney } from './upgrades.js';
+import { UPGRADES, UPGRADE_ORDER, formatMoney, rankInfo } from './upgrades.js';
 import { STAGE_NAMES, STAGE_DESCS, QUALITY, stageProgress } from './balance.js';
 import { orderRequirementText, orderProgressText } from './orders.js';
 import { NIGHT_MODS } from './nights.js';
 
 const $ = (id) => document.getElementById(id);
+const ROMAN = ['I', 'II', 'III', 'IV'];
 
 export class UI {
   constructor() {
@@ -584,9 +585,14 @@ export class UI {
     const grid = this.el.shopGrid;
     const scroll = grid.scrollTop;
     grid.innerHTML = '';
+    const rank = rankInfo(state.totalEarned || 0);
+    const hiddenCount = UPGRADE_ORDER.filter((id) => (UPGRADES[id].rank || 1) > rank.rank).length;
+    grid.appendChild(this.buildRankBanner(state, rank, hiddenCount));
     let lastCat = '';
     for (const id of UPGRADE_ORDER) {
       const def = UPGRADES[id];
+      const defRank = def.rank || 1;
+      if (defRank > rank.rank) continue;
       const lvl = state.upgrades[id];
       if (def.category !== lastCat) {
         lastCat = def.category;
@@ -600,7 +606,8 @@ export class UI {
       const cost = maxed ? null : def.costs[Math.min(lvl, def.costs.length - 1)];
       const canAfford = cost !== null && state.money >= cost;
       const card = document.createElement('div');
-      card.className = `upgrade-card${maxed ? ' maxed' : ''}${lvl > 0 ? ' owned' : ''}`;
+      card.className = `upgrade-card${maxed ? ' maxed' : ''}${lvl > 0 ? ' owned' : ''}${defRank >= 3 ? ' high-tier' : ''}`;
+      const rankTag = defRank > 1 ? `RANG ${ROMAN[defRank - 1]} · ` : '';
       let btnLabel;
       if (maxed) btnLabel = 'MAXIMUM';
       else if (locked) btnLabel = 'GESPERRT';
@@ -609,7 +616,7 @@ export class UI {
       card.innerHTML = `
         <div class="upgrade-top">
           <div class="upgrade-name">${def.name}</div>
-          <div class="upgrade-level">STUFE ${lvl}/${def.max}</div>
+          <div class="upgrade-level">${rankTag}STUFE ${lvl}/${def.max}</div>
         </div>
         <div class="upgrade-desc">${def.desc}</div>
         <div class="upgrade-effect${id === 'auto' ? ' warn' : ''}">${def.effect(lvl)}</div>
@@ -619,8 +626,29 @@ export class UI {
       grid.appendChild(card);
     }
     this.el.shopMoney.textContent = formatMoney(state.money);
-    this.el.shopEscalation.textContent = `Eskalation: Stufe ${state.stage} · ${STAGE_NAMES[state.stage - 1]}`;
+    this.el.shopEscalation.textContent = `Rangstufe ${rank.rank} · ${rank.name} · Eskalation: Stufe ${state.stage}`;
     grid.scrollTop = scroll;
+  }
+
+  buildRankBanner(state, rank, hiddenCount) {
+    const banner = document.createElement('div');
+    banner.className = 'shop-rank';
+    const hiddenText = hiddenCount === 1
+      ? '1 weiteres Upgrade wartet auf eine höhere Rangstufe.'
+      : `${hiddenCount} weitere Upgrades warten auf höhere Rangstufen.`;
+    const nextText = rank.next
+      ? `Erreiche Rangstufe ${rank.rank + 1} (${rank.next.name}) bei ${formatMoney(rank.next.threshold)} Gesamteinnahmen, um bessere Upgrades freizuschalten. Es fehlen ${formatMoney(rank.remaining)}.`
+      : 'Maximale Rangstufe erreicht. Alle Upgrades sind freigeschaltet.';
+    banner.innerHTML = `
+      <div class="shop-rank-top">
+        <span class="shop-rank-title">RANGSTUFE ${rank.rank} · ${rank.name.toUpperCase()}</span>
+        <span class="shop-rank-value">${formatMoney(state.totalEarned || 0)} Gesamteinnahmen</span>
+      </div>
+      <div class="shop-rank-bar"><i style="width:${Math.round(rank.progress * 100)}%"></i></div>
+      <div class="shop-rank-hint">${nextText}</div>
+      ${hiddenCount > 0 ? `<div class="shop-rank-hidden">${hiddenText}</div>` : ''}
+    `;
+    return banner;
   }
 
   /* ---------------- Overlays ---------------- */

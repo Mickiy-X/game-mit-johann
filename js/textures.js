@@ -207,85 +207,119 @@ export function metalTexture(tint = 0) {
 }
 
 /* ------------------------------------------------------------ */
-/* Porcelain face decal (transparent)                          */
+/* Vinyl face decal (transparent)                               */
 /* ------------------------------------------------------------ */
 export function faceTexture(stage) {
   const S = 512;
   const c = makeCanvas(S, S);
   const g = c.getContext('2d');
   g.clearRect(0, 0, S, S);
-
-  // eyebrow paint
-  g.strokeStyle = 'rgba(70,40,30,0.72)';
-  g.lineWidth = 5;
   g.lineCap = 'round';
-  g.beginPath(); g.arc(S * 0.27, S * 0.34, 44, Math.PI * 1.15, Math.PI * 1.85); g.stroke();
-  g.beginPath(); g.arc(S * 0.73, S * 0.34, 44, Math.PI * 1.15, Math.PI * 1.85); g.stroke();
 
-  // eye sockets painted
-  for (const ex of [S * 0.27, S * 0.73]) {
-    const grd = g.createRadialGradient(ex, S * 0.42, 4, ex, S * 0.42, 34);
-    grd.addColorStop(0, 'rgba(30,16,14,0.85)');
-    grd.addColorStop(0.62, 'rgba(45,25,20,0.55)');
-    grd.addColorStop(1, 'rgba(60,30,25,0)');
+  // strong painted eyebrows, one a little higher for an off look
+  g.strokeStyle = 'rgba(92,38,26,0.82)';
+  g.lineWidth = 7;
+  g.beginPath(); g.arc(S * 0.28, S * 0.33, 44, Math.PI * 1.12, Math.PI * 1.9); g.stroke();
+  g.lineWidth = 6;
+  g.beginPath(); g.arc(S * 0.72, S * 0.315, 42, Math.PI * 1.1, Math.PI * 1.86); g.stroke();
+
+  // bruised sockets
+  for (const [ex, ey] of [[S * 0.28, S * 0.43], [S * 0.72, S * 0.445]]) {
+    const grd = g.createRadialGradient(ex, ey, 6, ex, ey, 44);
+    grd.addColorStop(0, 'rgba(48,26,22,0.5)');
+    grd.addColorStop(0.55, 'rgba(58,34,28,0.25)');
+    grd.addColorStop(1, 'rgba(58,34,28,0)');
     g.fillStyle = grd;
-    g.beginPath();
-    g.ellipse(ex, S * 0.42, 35, 27, 0, 0, Math.PI * 2);
-    g.fill();
-    // lashes
-    g.strokeStyle = 'rgba(50,28,22,0.75)';
-    g.lineWidth = 3;
-    for (let i = -2; i <= 2; i++) {
-      g.beginPath();
-      g.moveTo(ex + i * 12, S * 0.42 + 20);
-      g.lineTo(ex + i * 14, S * 0.42 + 31);
-      g.stroke();
-    }
+    g.beginPath(); g.ellipse(ex, ey, 44, 34, 0, 0, Math.PI * 2); g.fill();
   }
 
-  // rosy cheeks
-  for (const cx of [S * 0.2, S * 0.8]) {
-    const grd = g.createRadialGradient(cx, S * 0.58, 2, cx, S * 0.58, 52);
-    grd.addColorStop(0, 'rgba(205,110,100,0.28)');
-    grd.addColorStop(1, 'rgba(205,110,100,0)');
-    g.fillStyle = grd;
-    g.beginPath(); g.arc(cx, S * 0.58, 52, 0, Math.PI * 2); g.fill();
+  // glassy green-blue eyes, right one slightly wider and lower
+  const eyes = [
+    { x: S * 0.28, y: S * 0.43, r: 30 },
+    { x: S * 0.72, y: S * 0.445, r: 34 }
+  ];
+  for (const e of eyes) {
+    const iris = g.createRadialGradient(e.x - 6, e.y - 7, 2, e.x, e.y, e.r);
+    iris.addColorStop(0, 'rgba(214,236,232,0.95)');
+    iris.addColorStop(0.32, 'rgba(109,158,146,0.95)');
+    iris.addColorStop(0.75, 'rgba(52,96,88,0.95)');
+    iris.addColorStop(1, 'rgba(16,30,28,0.95)');
+    g.fillStyle = iris;
+    g.beginPath(); g.ellipse(e.x, e.y, e.r, e.r * 0.86, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(8,10,10,0.95)';
+    g.beginPath(); g.ellipse(e.x + 1, e.y, e.r * 0.32, e.r * 0.42, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.75)';
+    g.beginPath(); g.arc(e.x - e.r * 0.34, e.y - e.r * 0.34, e.r * 0.16, 0, Math.PI * 2); g.fill();
+    // lower lid
+    g.strokeStyle = 'rgba(58,32,26,0.6)';
+    g.lineWidth = 3;
+    g.beginPath(); g.arc(e.x, e.y + 4, e.r * 0.95, Math.PI * 0.18, Math.PI * 0.82); g.stroke();
+  }
+
+  // freckles
+  for (let i = 0; i < 46; i++) {
+    const x = S * 0.5 + rand(-S * 0.22, S * 0.22);
+    const y = S * 0.5 + rand(-S * 0.05, S * 0.1);
+    g.fillStyle = `rgba(126,70,50,${rand(0.18, 0.4)})`;
+    g.beginPath(); g.arc(x, y, rand(0.8, 2.3), 0, Math.PI * 2); g.fill();
   }
 
   // nose
-  g.strokeStyle = 'rgba(90,55,45,0.35)';
-  g.lineWidth = 3;
-  g.beginPath(); g.moveTo(S * 0.5, S * 0.48); g.quadraticCurveTo(S * 0.475, S * 0.56, S * 0.505, S * 0.575); g.stroke();
+  g.strokeStyle = 'rgba(96,58,46,0.4)';
+  g.lineWidth = 3.5;
+  g.beginPath(); g.moveTo(S * 0.5, S * 0.49); g.quadraticCurveTo(S * 0.47, S * 0.57, S * 0.512, S * 0.585); g.stroke();
 
-  // mouth
-  g.strokeStyle = 'rgba(105,35,38,0.85)';
+  // stitched scar from temple to cheek
+  g.strokeStyle = 'rgba(70,28,24,0.9)';
   g.lineWidth = 4;
-  g.beginPath();
-  g.moveTo(S * 0.42, S * 0.68);
-  g.quadraticCurveTo(S * 0.5, S * 0.665, S * 0.58, S * 0.68);
-  g.stroke();
-  if (stage >= 3) {
-    // stitched mouth
-    g.strokeStyle = 'rgba(60,25,25,0.9)';
-    g.lineWidth = 2.5;
-    for (let i = 0; i < 6; i++) {
-      const x = S * 0.42 + i * (S * 0.16 / 5);
-      g.beginPath(); g.moveTo(x, S * 0.655); g.lineTo(x + 3, S * 0.705); g.stroke();
-    }
+  g.beginPath(); g.moveTo(S * 0.16, S * 0.24); g.quadraticCurveTo(S * 0.2, S * 0.37, S * 0.24, S * 0.52); g.stroke();
+  g.strokeStyle = 'rgba(38,16,14,0.95)';
+  g.lineWidth = 2;
+  for (let i = 0; i < 6; i++) {
+    const y = S * 0.27 + i * S * 0.045;
+    const x = S * 0.165 + i * S * 0.012;
+    g.beginPath(); g.moveTo(x - 10, y - 4); g.lineTo(x + 10, y + 4); g.stroke();
   }
+
+  // stitched mouth
+  const mouthY = S * 0.69;
+  g.strokeStyle = 'rgba(82,24,26,0.92)';
+  g.lineWidth = 5;
+  if (stage <= 2) {
+    g.beginPath(); g.moveTo(S * 0.4, mouthY - 4); g.quadraticCurveTo(S * 0.5, mouthY + 9, S * 0.6, mouthY - 4); g.stroke();
+  } else {
+    g.beginPath(); g.moveTo(S * 0.38, mouthY - 2); g.quadraticCurveTo(S * 0.5, mouthY + 22, S * 0.62, mouthY - 2); g.stroke();
+  }
+  g.strokeStyle = 'rgba(35,12,12,0.95)';
+  g.lineWidth = 2.4;
+  for (let i = 0; i < 8; i++) {
+    const x = S * 0.39 + i * (S * 0.22 / 7);
+    const lift = Math.sin((i / 7) * Math.PI) * 9;
+    g.beginPath(); g.moveTo(x, mouthY - 5 + lift * 0.2); g.lineTo(x + 2, mouthY + 7 + lift * 0.5); g.stroke();
+  }
+
   if (stage >= 4) {
-    // open crack mouth
-    g.fillStyle = 'rgba(25,5,5,0.88)';
-    g.beginPath();
-    g.ellipse(S * 0.5, S * 0.695, 34, 20, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = 'rgba(225,215,200,0.75)';
-    for (let i = 0; i < 5; i++) {
-      const x = S * 0.5 - 26 + i * 12;
+    g.fillStyle = 'rgba(22,5,6,0.9)';
+    g.beginPath(); g.ellipse(S * 0.5, mouthY + 6, 40, 21, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(222,210,188,0.8)';
+    for (let i = 0; i < 6; i++) {
+      const x = S * 0.5 - 30 + i * 12;
       g.beginPath();
-      g.moveTo(x, S * 0.68); g.lineTo(x + 5, S * 0.68); g.lineTo(x + 2.5, S * 0.705); g.closePath(); g.fill();
+      g.moveTo(x, mouthY - 1); g.lineTo(x + 6, mouthY - 1); g.lineTo(x + 3, mouthY + 7); g.closePath(); g.fill();
     }
   }
+
+  // dirt at hairline and chin
+  const hairline = g.createLinearGradient(0, 0, 0, S * 0.2);
+  hairline.addColorStop(0, `rgba(48,30,24,${0.18 + stage * 0.04})`);
+  hairline.addColorStop(1, 'rgba(48,30,24,0)');
+  g.fillStyle = hairline;
+  g.fillRect(0, 0, S, S * 0.2);
+  const chin = g.createLinearGradient(0, S * 0.84, 0, S);
+  chin.addColorStop(0, 'rgba(45,28,22,0)');
+  chin.addColorStop(1, 'rgba(45,28,22,0.22)');
+  g.fillStyle = chin;
+  g.fillRect(0, S * 0.84, S, S * 0.16);
 
   // cracks per stage
   const crackCount = Math.max(0, stage - 1) * 3;
@@ -306,13 +340,6 @@ export function faceTexture(stage) {
     g.stroke();
   }
 
-  // grime at hairline
-  const grd = g.createLinearGradient(0, 0, 0, S * 0.22);
-  grd.addColorStop(0, `rgba(45,30,25,${0.14 + stage * 0.04})`);
-  grd.addColorStop(1, 'rgba(45,30,25,0)');
-  g.fillStyle = grd;
-  g.fillRect(0, 0, S, S * 0.22);
-
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
@@ -320,79 +347,224 @@ export function faceTexture(stage) {
 }
 
 /* ------------------------------------------------------------ */
-export function dressTexture(stage) {
-  const W = 512, H = 1024;
+/* Striped doll shirt                                           */
+/* ------------------------------------------------------------ */
+export function shirtTexture(stage) {
+  const W = 512, H = 512;
   const c = makeCanvas(W, H);
   const g = c.getContext('2d');
 
-  const shade = Math.max(0, 0.28 - stage * 0.05);
-  const base = g.createLinearGradient(0, 0, 0, H);
-  base.addColorStop(0, stage >= 5 ? '#6e5651' : '#c0aaa4');
-  base.addColorStop(0.6, stage >= 5 ? '#5a4440' : '#a98f89');
-  base.addColorStop(1, stage >= 5 ? '#3c2c29' : '#7f6a66');
-  g.fillStyle = base;
+  g.fillStyle = stage >= 5 ? '#8f7d68' : '#d6c9ae';
   g.fillRect(0, 0, W, H);
 
-  // fabric noise
+  const stripe = stage >= 5 ? '#5e1f1e' : '#8f2f2b';
+  for (let y = 0; y < H; y += 64) {
+    g.fillStyle = stripe;
+    g.globalAlpha = 0.9;
+    g.fillRect(0, y + 10, W, 30);
+    g.globalAlpha = 1;
+  }
+
+  // weave noise
   const img = g.getImageData(0, 0, W, H);
   for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 18;
+    const n = (Math.random() - 0.5) * 20;
     img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n;
   }
   g.putImageData(img, 0, 0);
 
-  // vertical seams and folds
-  for (let x = 40; x < W; x += 68) {
-    g.strokeStyle = `rgba(40,25,22,${0.12 + shade * 0.4})`;
-    g.lineWidth = 2;
-    g.beginPath(); g.moveTo(x, 0); g.lineTo(x + rand(-10, 10), H); g.stroke();
-    g.strokeStyle = 'rgba(255,240,235,0.045)';
+  // vertical knit shadows
+  for (let x = 0; x < W; x += 14) {
+    g.strokeStyle = `rgba(30,18,14,${rand(0.03, 0.1)})`;
     g.lineWidth = 1;
-    g.beginPath(); g.moveTo(x + 5, 0); g.lineTo(x + 5, H); g.stroke();
-  }
-
-  // lace at bottom
-  g.strokeStyle = 'rgba(230,215,205,0.22)';
-  g.lineWidth = 2;
-  for (let x = 0; x < W; x += 26) {
-    g.beginPath();
-    g.arc(x + 13, H - 26, 13, 0, Math.PI);
-    g.stroke();
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x + rand(-2, 2), H); g.stroke();
   }
 
   // stains
-  const stains = 4 + stage * 5;
-  for (let i = 0; i < stains; i++) {
-    const x = Math.random() * W, y = rand(H * 0.15, H);
-    const r = rand(16, 80);
+  for (let i = 0; i < 6 + stage * 4; i++) {
+    const x = Math.random() * W, y = Math.random() * H, r = rand(10, 55);
     const grd = g.createRadialGradient(x, y, 0, x, y, r);
-    const darkRed = stage >= 4 && Math.random() < 0.4;
-    grd.addColorStop(0, darkRed ? 'rgba(70,15,12,0.4)' : 'rgba(30,20,16,0.35)');
+    const red = stage >= 3 && Math.random() < 0.35;
+    grd.addColorStop(0, red ? 'rgba(72,14,12,0.4)' : 'rgba(34,24,18,0.32)');
     grd.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = grd;
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
   }
 
-  // torn patches at high stage
+  // torn patches
   if (stage >= 4) {
-    for (let i = 0; i < 5; i++) {
-      const x = rand(40, W - 40), y = rand(H * 0.2, H * 0.9);
-      const w = rand(7, 30), h = rand(14, 60);
-      g.fillStyle = 'rgba(12,8,8,0.75)';
+    for (let i = 0; i < 4; i++) {
+      const x = rand(30, W - 30), y = rand(40, H - 40);
+      g.fillStyle = 'rgba(16,10,9,0.8)';
       g.beginPath();
       g.moveTo(x, y);
-      g.lineTo(x + w, y + rand(-4, 8));
-      g.lineTo(x + w * 0.5, y + h);
-      g.lineTo(x - w * 0.4, y + h * 0.6);
+      g.lineTo(x + rand(10, 30), y + rand(-4, 6));
+      g.lineTo(x + rand(4, 18), y + rand(20, 46));
+      g.lineTo(x - rand(4, 12), y + rand(10, 24));
       g.closePath(); g.fill();
     }
   }
 
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = THREE.RepeatWrapping;
-  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
   return t;
+}
+
+/* ------------------------------------------------------------ */
+/* Denim overalls                                               */
+/* ------------------------------------------------------------ */
+export function denimTexture(stage) {
+  const W = 512, H = 512;
+  const c = makeCanvas(W, H);
+  const g = c.getContext('2d');
+
+  g.fillStyle = stage >= 5 ? '#2c3442' : '#384d63';
+  g.fillRect(0, 0, W, H);
+
+  // diagonal twill weave
+  g.globalAlpha = 0.16;
+  for (let i = -H; i < W; i += 5) {
+    g.strokeStyle = i % 10 === 0 ? '#8fa4b8' : '#141c26';
+    g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(i, 0); g.lineTo(i + H, H); g.stroke();
+  }
+  g.globalAlpha = 1;
+
+  // weave noise
+  const img = g.getImageData(0, 0, W, H);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 16;
+    img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n;
+  }
+  g.putImageData(img, 0, 0);
+
+  // seams
+  g.strokeStyle = 'rgba(208,196,160,0.28)';
+  g.lineWidth = 2;
+  for (const x of [70, 256, 442]) {
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x + rand(-4, 4), H); g.stroke();
+  }
+
+  // pocket
+  g.strokeStyle = 'rgba(210,196,158,0.32)';
+  g.strokeRect(196, 150, 120, 110);
+  g.strokeStyle = 'rgba(12,18,24,0.28)';
+  g.strokeRect(199, 153, 114, 104);
+
+  // oil and rust
+  for (let i = 0; i < 5 + stage * 3; i++) {
+    const x = Math.random() * W, y = Math.random() * H, r = rand(12, 54);
+    const grd = g.createRadialGradient(x, y, 0, x, y, r);
+    grd.addColorStop(0, Math.random() < 0.3 ? 'rgba(88,42,20,0.34)' : 'rgba(12,14,18,0.38)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+
+  if (stage >= 4) {
+    for (let i = 0; i < 3; i++) {
+      const x = rand(30, W - 30), y = rand(60, H - 60);
+      g.fillStyle = 'rgba(8,10,12,0.72)';
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + rand(8, 26), y + rand(-2, 8));
+      g.lineTo(x + rand(2, 16), y + rand(16, 40));
+      g.closePath(); g.fill();
+    }
+  }
+
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+
+/* ------------------------------------------------------------ */
+/* Safe-room tiles                                              */
+/* ------------------------------------------------------------ */
+export function tileTexture() {
+  const S = 512;
+  const c = makeCanvas(S, S);
+  const g = c.getContext('2d');
+  g.fillStyle = '#202525';
+  g.fillRect(0, 0, S, S);
+  const n = 4;
+  const step = S / n;
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const light = (x + y) % 2 === 0;
+      g.fillStyle = light ? '#6d726b' : '#39413c';
+      g.fillRect(x * step + 3, y * step + 3, step - 6, step - 6);
+      g.fillStyle = `rgba(255,255,255,${rand(0.01, 0.04)})`;
+      g.fillRect(x * step + 3, y * step + 3, step - 6, 6);
+    }
+  }
+  for (let i = 0; i < 5; i++) {
+    const x = Math.random() * S, y = Math.random() * S, r = rand(20, 80);
+    const grd = g.createRadialGradient(x, y, 0, x, y, r);
+    grd.addColorStop(0, 'rgba(14,16,14,0.34)');
+    grd.addColorStop(1, 'rgba(14,16,14,0)');
+    g.fillStyle = grd;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  return tex(c, 4, 6);
+}
+
+/* ------------------------------------------------------------ */
+/* Corrugated metal wall panels                                 */
+/* ------------------------------------------------------------ */
+export function corrugatedTexture() {
+  const W = 512, H = 512;
+  const c = makeCanvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = '#4a4e50';
+  g.fillRect(0, 0, W, H);
+  for (let x = 0; x < W; x += 24) {
+    const grd = g.createLinearGradient(x, 0, x + 24, 0);
+    grd.addColorStop(0, 'rgba(16,18,19,0.55)');
+    grd.addColorStop(0.35, 'rgba(126,133,136,0.35)');
+    grd.addColorStop(0.6, 'rgba(78,84,86,0.1)');
+    grd.addColorStop(1, 'rgba(14,16,17,0.5)');
+    g.fillStyle = grd;
+    g.fillRect(x, 0, 24, H);
+  }
+  for (let i = 0; i < 10; i++) {
+    const x = Math.random() * W, y = rand(0, H * 0.6);
+    const grd = g.createLinearGradient(x, y, x, y + rand(50, 160));
+    grd.addColorStop(0, 'rgba(120,62,30,0.18)');
+    grd.addColorStop(1, 'rgba(120,62,30,0)');
+    g.fillStyle = grd;
+    g.fillRect(x, y, rand(3, 10), rand(60, 170));
+  }
+  return tex(c, 3, 2);
+}
+
+/* ------------------------------------------------------------ */
+/* Wall panel with painted lower band                           */
+/* ------------------------------------------------------------ */
+export function paintedWallTexture(tint = '#49514f') {
+  const c = makeCanvas(512, 512);
+  const g = c.getContext('2d');
+  g.fillStyle = tint;
+  g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 90; i++) {
+    g.fillStyle = `rgba(0,0,0,${rand(0.01, 0.06)})`;
+    g.fillRect(Math.random() * 512, Math.random() * 512, rand(4, 30), rand(2, 16));
+  }
+  g.fillStyle = 'rgba(14,16,16,0.55)';
+  g.fillRect(0, 400, 512, 112);
+  g.fillStyle = 'rgba(198,158,68,0.14)';
+  g.fillRect(0, 392, 512, 8);
+  const img = g.getImageData(0, 0, 512, 512);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 12;
+    img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n;
+  }
+  g.putImageData(img, 0, 0);
+  return tex(c, 4, 2);
 }
 
 /* ------------------------------------------------------------ */

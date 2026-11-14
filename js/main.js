@@ -7,7 +7,7 @@ import { UI } from './ui.js';
 import { AudioEngine } from './audio.js';
 import { Net } from './net.js';
 import { RemoteAvatar } from './avatar.js';
-import { UPGRADES, UPGRADE_ORDER, freshUpgrades, getStats, formatMoney } from './upgrades.js';
+import { UPGRADES, UPGRADE_ORDER, RANKS, freshUpgrades, getStats, formatMoney, rankFor } from './upgrades.js';
 import {
   GOAL, DAY_LENGTH, DUSK_LENGTH, nightLength, stageFor,
   STAGE_NAMES, QUALITY, PULL_BASE_RATE
@@ -265,7 +265,7 @@ const staticColliders = [
   ...world.colliders.pedestal
 ];
 const dollColliders = [...world.colliders.walls, ...world.colliders.props];
-const doorCollider = { minX: -16.35, maxX: -13.15, minZ: 11.85, maxZ: 12.2 };
+const doorCollider = { ...WORLD.door.collider };
 const closedColliders = [...staticColliders, doorCollider];
 
 function activeColliders() {
@@ -1306,7 +1306,7 @@ function handleGuestAction(msg) {
       break;
     case 'door':
       if (state.doorBroken) return;
-      if (!near(-14.75, 12, 3.5)) return;
+      if (!near(WORLD.door.x, WORLD.door.z, 3.5)) return;
       toggleDoor();
       break;
     case 'pickup': {
@@ -1555,7 +1555,7 @@ function applyGuestSnapshot(s) {
 
 function renderGuestShopIfChanged() {
   if (!session.shopOpen) return;
-  const sig = `${state.money}|${state.phase}|${state.upgrades.ladder}|${UPGRADE_ORDER.map((id) => state.upgrades[id]).join(',')}`;
+  const sig = `${state.money}|${state.phase}|${rankFor(state.totalEarned)}|${state.upgrades.ladder}|${UPGRADE_ORDER.map((id) => state.upgrades[id]).join(',')}`;
   if (sig === lastShopSig) return;
   lastShopSig = sig;
   ui.renderShop(state);
@@ -1574,7 +1574,7 @@ function handleGuestEvent(e) {
       player.addShake(0.38, 1.2);
       player.carrying.length = 0;
       player.updateCarryDisplay();
-      player.reset(new THREE.Vector3(-14.2, 0, 18.2));
+      player.reset(WORLD.respawnSafe.clone());
       player.yaw = 0;
       player.pitch = 0;
       player.invulnerable = 7;
@@ -2296,10 +2296,16 @@ function johannPull(zoneId, units) {
 
 function addMoney(value) {
   if (!(value > 0)) return;
+  const prevRank = rankFor(state.totalEarned);
   state.money += value;
   state.totalEarned += value;
   state.dayEarned += value;
   ui.pulseMoney();
+  const newRank = rankFor(state.totalEarned);
+  if (newRank > prevRank) {
+    ui.toast(`Rangstufe ${newRank} erreicht: ${RANKS[newRank - 1].name}. Neue Upgrades im Katalog.`, 'gold', 6800);
+    audio.coin();
+  }
   if (!state.goalAnnounced && state.totalEarned >= GOAL) {
     state.goalAnnounced = true;
     ui.toast('Das Fluchtticket ist bezahlt. Überlebe bis zum Morgen!', 'gold', 6800);
@@ -2483,14 +2489,14 @@ function registerOrderSale(spools) {
 }
 
 const PICKUP_SPOTS = [
-  { x: 16.2, z: -20.2 },
-  { x: -16.4, z: -15.4 },
-  { x: 16.6, z: 2.2 },
-  { x: -15.6, z: 7.2 },
-  { x: 8.2, z: -20.2 },
-  { x: 14.8, z: -6.4 },
-  { x: -13.2, z: -6.2 },
-  { x: 16.2, z: 16.8 }
+  { x: -5.6, z: -19.6 },
+  { x: -16.4, z: -15.6 },
+  { x: -15.2, z: -2.8 },
+  { x: -15.2, z: 14.0 },
+  { x: 9.6, z: -18.0 },
+  { x: 15.4, z: -12.4 },
+  { x: 9.6, z: 0.8 },
+  { x: 10.4, z: 20.4 }
 ];
 
 function spotFree(x, z, r) {
@@ -2655,7 +2661,7 @@ function findInteraction() {
     if (d < 2.1) add('pickup', d, { pickupIndex: i });
   }
 
-  const doorD = dTo(-14.75, 12);
+  const doorD = dTo(WORLD.door.outside.x, WORLD.door.outside.z);
   if (doorD < 2.9) add('door', doorD);
   const winderD = dTo(WORLD.winder.x, WORLD.winder.z);
   if (winderD < 2.6) add('winder', winderD);
@@ -2961,6 +2967,7 @@ function buyUpgrade(id, external = false) {
   if (external && state.phase !== 'day') return;
   const def = UPGRADES[id];
   if (!def) return;
+  if ((def.rank || 1) > rankFor(state.totalEarned)) return;
   const lvl = state.upgrades[id] || 0;
   if (lvl >= def.max) return;
   if (def.requires && state.upgrades[def.requires] === 0) return;
@@ -3204,8 +3211,8 @@ function updateDoorCombat(dt) {
     && (!remote.active || isProtected(remote.position))
     && (!johann.active || isProtected(johann.position));
   if (!everyoneSafe) return;
-  const dx = doll.position.x - (-14.75);
-  const dz = doll.position.z - 10.15;
+  const dx = doll.position.x - WORLD.door.outside.x;
+  const dz = doll.position.z - WORLD.door.outside.z;
   const dist = Math.hypot(dx, dz);
   if (dist > 3.9) return;
 
@@ -3280,7 +3287,7 @@ function catchPlayer() {
     sendToGuest({ t: 'ev', e: { kind: 'toast', text: 'Spieler 1 wurde erwischt.', type: 'danger', duration: 4200 } });
   }
 
-  player.reset(new THREE.Vector3(-14.2, 0, 18.2));
+  player.reset(WORLD.respawnSafe.clone());
   player.yaw = 0;
   player.pitch = 0;
   player.invulnerable = 7;
@@ -3310,7 +3317,7 @@ function catchRemotePlayer() {
   remote.carrying.length = 0;
   remote.pulling = false;
   remote.pullZone = null;
-  remote.position.set(-14.2, 0, 18.2);
+  remote.position.copy(WORLD.respawnSafe);
   remote.yaw = 0;
   remote.pitch = 0;
   remote.invulnerable = 7;
@@ -3452,7 +3459,7 @@ function updatePartnerHud() {
     ui.setPartner(null);
     return;
   }
-  const inside = pos.x < WORLD.safe.maxX && pos.z > WORLD.safe.minZ;
+  const inside = insideSafeArea(pos);
   ui.setPartner(isHost() ? 'SPIELER 2' : 'SPIELER 1', inside);
 }
 
@@ -3491,13 +3498,13 @@ function computeObjective() {
   const ticket = Math.min(1, state.totalEarned / GOAL);
 
   if (state.phase === 'night') {
-    const inside = player.position.x < WORLD.safe.maxX && player.position.z > WORLD.safe.minZ;
+    const inside = insideSafeArea(player.position);
     const progress = 1 - Math.max(0, state.phaseTimeLeft) / nightLength(state.stage);
     if (state.doorBroken) {
       return { key: 'night-broken', step: 'NACHTWACHE', title: 'Überlebe bis zum Morgen', sub: 'Die Tür ist zerstört. Halte Abstand und bleib in Bewegung.', progress, danger: true };
     }
     if (!inside) {
-      return { key: 'night-outside', step: 'NACHTWACHE', title: 'In den Safe Room', sub: `Tür ${dirHint(-14.75, 12)} · ${metresTo(-14.75, 12)} m`, progress, danger: true };
+      return { key: 'night-outside', step: 'NACHTWACHE', title: 'In den Safe Room', sub: `Tür ${dirHint(WORLD.door.outside.x, WORLD.door.outside.z)} · ${metresTo(WORLD.door.outside.x, WORLD.door.outside.z)} m`, progress, danger: true };
     }
     if (!state.doorClosed) {
       return { key: 'night-door', step: 'NACHTWACHE', title: 'Tür schließen', sub: 'Nur eine geschlossene Tür schützt dich.', progress, danger: true };
@@ -3510,7 +3517,7 @@ function computeObjective() {
       key: 'dusk',
       step: 'NACHTWACHE',
       title: 'Safe Room aufsuchen',
-      sub: `Tür ${dirHint(-14.75, 12)} · ${metresTo(-14.75, 12)} m. Hinter dir schließen.`,
+      sub: `Tür ${dirHint(WORLD.door.outside.x, WORLD.door.outside.z)} · ${metresTo(WORLD.door.outside.x, WORLD.door.outside.z)} m. Hinter dir schließen.`,
       progress: 1 - Math.max(0, state.phaseTimeLeft) / (DUSK_LENGTH + state.stats.alarmExtra),
       danger: true
     };
@@ -3588,7 +3595,7 @@ function updateTitleCamera(dt) {
   titleTime += dt;
   const t = titleTime;
   camera.position.set(Math.sin(t * 0.07) * 5.8, 3.6 + Math.sin(t * 0.19) * 0.18, 5.6 + Math.cos(t * 0.07) * 1.3);
-  camera.lookAt(0, 4.55, -13.6);
+  camera.lookAt(0, 4.7, -13.6);
 }
 
 let lastTime = performance.now();

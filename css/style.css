@@ -1106,6 +1106,20 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
 }
 .shop-grid::-webkit-scrollbar { width: 6px; }
 .shop-grid::-webkit-scrollbar-thumb { background: #2d3032; }
+.shop-rank {
+  grid-column: 1 / -1;
+  padding: 13px 16px 12px;
+  margin-bottom: 2px;
+  border: 1px solid rgba(255,181,71,0.22);
+  background: linear-gradient(120deg, rgba(255,181,71,0.07), rgba(255,181,71,0.015) 60%, transparent);
+}
+.shop-rank-top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.shop-rank-title { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; color: var(--amber); }
+.shop-rank-value { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; color: #918b82; }
+.shop-rank-bar { height: 3px; margin: 9px 0 8px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.shop-rank-bar i { display: block; height: 100%; background: linear-gradient(90deg, #b8741f, var(--amber)); transition: width 0.3s; }
+.shop-rank-hint { font-size: 10.5px; line-height: 1.5; color: #c9bfae; }
+.shop-rank-hidden { margin-top: 4px; font-size: 9.5px; letter-spacing: 0.03em; color: #8f8980; }
 .shop-section {
   grid-column: 1 / -1;
   display: flex;
@@ -1134,6 +1148,8 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14p
 .upgrade-card:hover { border-color: rgba(255,181,71,0.28); background: rgba(255,255,255,0.04); }
 .upgrade-card.maxed { opacity: 0.55; }
 .upgrade-card.owned { border-color: rgba(143, 224, 122, 0.2); }
+.upgrade-card.high-tier { border-color: rgba(255,181,71,0.16); }
+.upgrade-card.high-tier .upgrade-level { color: var(--amber); border-color: rgba(255,181,71,0.3); }
 .upgrade-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .upgrade-name {
   font-family: var(--font-display);

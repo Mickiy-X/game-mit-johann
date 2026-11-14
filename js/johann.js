@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WORLD, resolveCircle } from './world.js';
+import { WORLD, resolveCircle, navWaypoint } from './world.js';
 import { nameTexture } from './textures.js';
 
 const LINES_DAY = [
@@ -191,7 +191,8 @@ export class Johann {
   }
 
   respawnSafe() {
-    this.position.set(-14.2, 0, 18.6);
+    this.position.copy(WORLD.respawnSafe);
+    this.group.position.copy(WORLD.respawnSafe);
     this.state = 'safe';
     this.caughtTimer = 0;
     this.spoolCarry.visible = false;
@@ -205,10 +206,12 @@ export class Johann {
   }
 
   moveToward(target, speed, dt, colliders) {
-    const dx = target.x - this.position.x;
-    const dz = target.z - this.position.z;
+    const finalDist = Math.hypot(target.x - this.position.x, target.z - this.position.z);
+    const wp = navWaypoint(this.position, target);
+    const dx = wp.x - this.position.x;
+    const dz = wp.z - this.position.z;
     const dist = Math.hypot(dx, dz);
-    if (dist < 0.001) return dist;
+    if (dist < 0.001) return finalDist;
     const step = Math.min(speed * dt, dist);
     const next = this.position.clone();
     next.x += (dx / dist) * step;
@@ -222,7 +225,7 @@ export class Johann {
     while (diff < -Math.PI) diff += Math.PI * 2;
     this.group.rotation.y += diff * Math.min(1, dt * 8);
     this.moving = true;
-    return dist;
+    return finalDist;
   }
 
   chooseZone(ctx) {
@@ -331,7 +334,7 @@ export class Johann {
         break;
       }
       case 'toWinder': {
-        this.target.set(6, 0, 8.55);
+        this.target.set(WORLD.winder.x + 1.1, 0, WORLD.winder.z - 0.5);
         const dist = this.moveToward(this.target, this.speed, dt, colliders);
         if (dist < 1.3) {
           this.state = 'wind';
@@ -348,7 +351,7 @@ export class Johann {
         break;
       }
       case 'toSell': {
-        this.target.set(13, 0, 8.55);
+        this.target.set(WORLD.sell.x + 1.1, 0, WORLD.sell.z - 0.6);
         const dist = this.moveToward(this.target, this.speed, dt, colliders);
         if (dist < 1.3) {
           this.state = 'sell';
@@ -378,32 +381,22 @@ export class Johann {
   }
 
   flee(dt, ctx) {
-    const inside = ctx.isInsideSafe(this.position);
+    // the safe-area test has a small tolerance for the player; Johann must be clearly inside
+    const inside = ctx.isInsideSafe(this.position) && this.position.x > WORLD.safe.minX + 1.2;
     const colliders = ctx.colliders;
     this.moving = false;
 
     if (!inside) {
-      // open door if needed
+      // open the safe door before walking into it
       if (ctx.doorClosed && !ctx.doorBroken && !this.doorBusy) {
-        const doorDist = Math.hypot(this.position.x - (-14.75), this.position.z - 12);
+        const doorDist = Math.hypot(this.position.x - WORLD.door.outside.x, this.position.z - WORLD.door.outside.z);
         if (doorDist < 4.2 && ctx.openDoor) {
           ctx.openDoor();
           this.doorBusy = true;
           setTimeout(() => { this.doorBusy = false; }, 900);
         }
       }
-      // Simple waypoint route: never walk straight into the safe room's east wall.
-      let target;
-      const eastOfSafe = this.position.x > -11.3 && this.position.z > 11;
-      const nearDoorFront = Math.hypot(this.position.x + 14.75, this.position.z - 10.5) < 1.6;
-      if (eastOfSafe) {
-        target = new THREE.Vector3(-10.4, 0, 10.2);
-      } else if (this.position.z < 12.2 && !nearDoorFront) {
-        target = new THREE.Vector3(-14.75, 0, 10.5);
-      } else {
-        target = new THREE.Vector3(-14.6, 0, 18.4);
-      }
-      this.moveToward(target, 5.4, dt, colliders);
+      this.moveToward(WORLD.respawnSafe, 5.4, dt, colliders);
       if (this.lineTimer > 6 && Math.random() < 0.02) this.say(ctx, LINES_DUSK[(Math.random() * LINES_DUSK.length) | 0]);
       this.state = 'flee';
     } else {
