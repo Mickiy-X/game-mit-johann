@@ -22,6 +22,38 @@ function spoolModel(color = 0xd8cfc0) {
   return g;
 }
 
+function carryHand(side) {
+  const g = new THREE.Group();
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd6a37e, roughness: 0.72 });
+  const sleeveMat = new THREE.MeshStandardMaterial({ color: 0xb7a98f, roughness: 0.92 });
+  const cuffMat = new THREE.MeshStandardMaterial({ color: 0xd6c6a8, roughness: 0.95 });
+
+  const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.064, 0.46, 8), sleeveMat);
+  forearm.position.set(side * 0.02, -0.17, 0.19);
+  forearm.rotation.x = 2.28;
+  g.add(forearm);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.045, 8), cuffMat);
+  cuff.position.set(side * 0.01, -0.035, 0.04);
+  cuff.rotation.x = 0.35;
+  g.add(cuff);
+
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.073, 10, 8), skinMat);
+  hand.scale.set(1.18, 0.92, 1.06);
+  g.add(hand);
+  for (let i = 0; i < 3; i++) {
+    const finger = new THREE.Mesh(new THREE.SphereGeometry(0.021, 6, 5), skinMat);
+    finger.scale.set(0.75, 1.15, 1.35);
+    finger.position.set(side * 0.062, -0.052, -0.035 + i * 0.035);
+    g.add(finger);
+  }
+  const thumb = new THREE.Mesh(new THREE.SphereGeometry(0.027, 6, 5), skinMat);
+  thumb.scale.set(1.15, 1.0, 1.3);
+  thumb.position.set(side * -0.045, 0.055, 0.025);
+  g.add(thumb);
+
+  return g;
+}
+
 export class Player {
   constructor(camera) {
     this.camera = camera;
@@ -53,6 +85,9 @@ export class Player {
     this.jumpHeld = false;
     this.landDip = 0;
     this.cameraY = this.eyeHeight;
+    this.jumpTilt = 0;
+    this.onJump = null;
+    this.onLand = null;
 
     this.camera.rotation.order = 'YXZ';
 
@@ -75,6 +110,12 @@ export class Player {
     s2.position.set(0.36, -0.1, 0.05);
     s2.visible = false;
     this.carryVisual.add(s2);
+    const handL = carryHand(-1);
+    handL.position.set(-0.31, 0, 0.02);
+    this.carryVisual.add(handL);
+    const handR = carryHand(1);
+    handR.position.set(0.31, 0, 0.02);
+    this.carryVisual.add(handR);
     this.carryVisual.position.set(0.52, -0.52, -0.95);
     this.carryVisual.rotation.set(0.2, -0.3, 0.2);
     this.carryVisual.scale.setScalar(0.85);
@@ -129,6 +170,8 @@ export class Player {
       this.coyote = 0;
       this.jumpBuffer = 0;
       this.landDip = 0;
+      this.jumpTilt -= 0.02;
+      if (this.onJump) this.onJump();
     }
 
     if (!this.grounded) {
@@ -142,13 +185,15 @@ export class Player {
         this.vy = 0;
         this.grounded = true;
         this.landDip = 0.055 + impact * 0.1;
+        this.jumpTilt += 0.035 * impact;
         this.addShake(0.04 * impact, 0.16);
-        if (onStep) onStep(false);
+        if (this.onLand) this.onLand(impact);
       }
     } else {
       this.position.y = 0;
     }
     this.landDip *= Math.exp(-dt * 9);
+    this.jumpTilt = Math.max(-0.09, Math.min(0.09, this.jumpTilt * Math.exp(-dt * 8)));
 
     // sprint / stamina
     const wantSprint = input.sprint && moving && this.stamina > 2 && state.phase !== 'shop';
@@ -198,6 +243,12 @@ export class Player {
       this.bobAmount += (0 - this.bobAmount) * Math.min(1, dt * 8);
     }
 
+    if (this.carryVisual.visible) {
+      const sway = Math.sin(this.bob * 0.5) * this.bobAmount * 0.4;
+      this.carryVisual.position.x = 0.52 + sway;
+      this.carryVisual.position.y = -0.52 - this.bobAmount * 0.55 - (this.grounded ? 0 : 0.03);
+    }
+
     // camera shake decay
     if (this.shakeTime > 0) {
       this.shakeTime -= dt;
@@ -224,7 +275,7 @@ export class Player {
       this.cameraY + bobY + sy - this.landDip,
       this.position.z + sz
     );
-    this.camera.rotation.set(this.pitch, this.yaw, Math.sin(this.bob * 0.5) * this.bobAmount * 0.25 * m);
+    this.camera.rotation.set(this.pitch + this.jumpTilt, this.yaw, Math.sin(this.bob * 0.5) * this.bobAmount * 0.25 * m);
   }
 
   get position2D() {

@@ -82,6 +82,25 @@ export function buildWorkerFigure(opts = {}) {
     add(body, new THREE.SphereGeometry(0.012, 6, 6), buckleMat, side * 0.125, 1.27, 0.273);
   }
 
+  /* belt, pouch, pocket pencil ---------------------------------- */
+  const leatherMat = new THREE.MeshStandardMaterial({ color: 0x4c3828, roughness: 0.88 });
+  add(body, new THREE.CylinderGeometry(0.258, 0.252, 0.072, 16, 1, true), leatherMat, 0, 1.02, 0);
+  add(body, new THREE.BoxGeometry(0.078, 0.064, 0.026), buckleMat, 0, 1.02, 0.252);
+  add(body, new THREE.BoxGeometry(0.024, 0.026, 0.03), darkMat, 0, 1.02, 0.262);
+
+  const pouch = new THREE.Group();
+  pouch.position.set(0.255, 0.965, 0.03);
+  pouch.rotation.y = 0.18;
+  const pouchBody = add(pouch, new THREE.BoxGeometry(0.105, 0.145, 0.095), leatherMat, 0, 0, 0);
+  pouchBody.rotation.z = 0.04;
+  add(pouch, new THREE.BoxGeometry(0.112, 0.052, 0.102), denimDark, 0, 0.052, 0);
+  add(pouch, new THREE.SphereGeometry(0.014, 6, 6), buckleMat, 0, -0.012, 0.052);
+  body.add(pouch);
+
+  const pencil = add(body, new THREE.CylinderGeometry(0.009, 0.009, 0.16, 6), new THREE.MeshStandardMaterial({ color: 0xc9a536, roughness: 0.6 }), 0.045, 1.285, 0.262);
+  pencil.rotation.z = 0.16;
+  add(body, new THREE.ConeGeometry(0.009, 0.028, 6), darkMat, 0.045 - 0.012, 1.355, 0.262).rotation.z = 0.16;
+
   const collar = add(body, new THREE.TorusGeometry(0.15, 0.022, 6, 16), cuffMat, 0, 1.552, 0);
   collar.rotation.x = Math.PI / 2;
   add(body, new THREE.CylinderGeometry(0.075, 0.09, 0.13, 10), skinMat, 0, 1.585, 0);

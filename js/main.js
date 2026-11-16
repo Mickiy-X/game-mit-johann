@@ -7,6 +7,7 @@ import { UI } from './ui.js';
 import { AudioEngine } from './audio.js';
 import { Net } from './net.js';
 import { RemoteAvatar } from './avatar.js';
+import { loadGLBSafe, fitModel, markStatic } from './assets.js';
 import { UPGRADES, UPGRADE_ORDER, RANKS, freshUpgrades, getStats, formatMoney, rankFor } from './upgrades.js';
 import {
   GOAL, DAY_LENGTH, DUSK_LENGTH, nightLength, stageFor,
@@ -44,6 +45,81 @@ const johann = new Johann(scene);
 const ui = new UI();
 const audio = new AudioEngine();
 const net = new Net();
+
+/* ============================================================ */
+/* KI-Assets (Meshy)                                            */
+/* ============================================================ */
+const aiParams = new URLSearchParams(location.search);
+const AI_ENABLED = aiParams.get('ai') !== 'off';
+const AI_MAP_LIFT = parseFloat(aiParams.get('maplift') || '0') || 0;
+const AI_MAP_YAW = ((parseFloat(aiParams.get('mapyaw') || '0') || 0) * Math.PI) / 180;
+const AI_DOLL_YAW = ((parseFloat(aiParams.get('dollyaw') || '0') || 0) * Math.PI) / 180;
+
+function hideProceduralShell() {
+  const box = new THREE.Box3();
+  const size = new THREE.Vector3();
+  world.room.traverse((o) => {
+    if (!o.isMesh) return;
+    box.setFromObject(o);
+    box.getSize(size);
+    const flat = size.y < 0.4 && (size.x > 5 || size.z > 5);
+    const big = size.x > 30 || size.z > 30 || size.y > 9;
+    if (flat || big) o.visible = false;
+  });
+}
+
+function countTriangles(root) {
+  let n = 0;
+  root.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    const g = o.geometry;
+    n += (g.index ? g.index.count : g.attributes.position.count) / 3;
+  });
+  return Math.round(n);
+}
+
+function boostTextureQuality(root) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (m && m.map) m.map.anisotropy = 8;
+    }
+  });
+}
+
+async function initAIAssets() {
+  if (!AI_ENABLED) return;
+
+  const [map, dollBody] = await Promise.all([
+    loadGLBSafe('assets/models/map_factory.glb'),
+    loadGLBSafe('assets/models/char_w7.glb')
+  ]);
+
+  if (map) {
+    const env = markStatic(map.scene);
+    env.rotation.y = AI_MAP_YAW;
+    fitModel(env, { maxWidth: 34, maxDepth: 42 });
+    env.position.y += 0.02 + AI_MAP_LIFT;
+    scene.add(env);
+    boostTextureQuality(env);
+    hideProceduralShell();
+    console.info(`[assets] Fabrik-Map geladen: ${countTriangles(env).toLocaleString('de-DE')} Tris`);
+  }
+
+  if (dollBody) {
+    markStatic(dollBody.scene);
+    dollBody.scene.rotation.y = AI_DOLL_YAW;
+    doll.attachExternalBody(dollBody.scene);
+    boostTextureQuality(dollBody.scene);
+    console.info(`[assets] W7-Körper geladen: ${countTriangles(dollBody.scene).toLocaleString('de-DE')} Tris`);
+  }
+}
+
+player.onJump = () => audio.jump();
+player.onLand = (impact) => {
+  if (!session.localPaused && !session.shopOpen) audio.land(impact);
+};
 
 /* ============================================================ */
 /* Co-op session                                                */
@@ -1366,6 +1442,7 @@ function sellAllFor(who) {
   who.carrying.length = 0;
   if (who === player) player.updateCarryDisplay();
   addMoney(payout);
+  world.pulseSale();
   registerOrderSale(spools);
   resetHold();
   audio.sale();
@@ -2908,6 +2985,7 @@ function sellAll() {
   state.carried.length = 0;
   player.updateCarryDisplay();
   addMoney(payout);
+  world.pulseSale();
   registerOrderSale(spools);
   resetHold();
   audio.sale();
@@ -3675,4 +3753,6 @@ if (params.has('debug')) {
   };
 }
 
+/* KI-Modelle nach dem Start nachladen; fehlende Dateien ändern nichts. */
+initAIAssets();
 requestAnimationFrame(animate);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { WORLD, resolveCircle, navWaypoint } from './world.js';
 import { faceTexture, shirtTexture, denimTexture } from './textures.js';
+import { fitModel } from './assets.js';
 
 function stainTexture() {
   const c = document.createElement('canvas');
@@ -477,6 +478,28 @@ export class Doll {
     this.headGroup.rotation.set(0.3, 0, 0);
   }
 
+  /* Ersetzt den prozeduralen Körper durch das Meshy-Modell; Sway/Zucken laufen weiter. */
+  attachExternalBody(root) {
+    const box = new THREE.Box3().setFromObject(this.sway);
+    const height = box.max.y - box.min.y;
+    for (const child of this.sway.children) child.visible = false;
+    fitModel(root, { height });
+    this.externalBody = root;
+    this.sway.add(root);
+
+    const glow = new THREE.PointLight(0xff2412, 1.4, 9, 1.8);
+    glow.position.set(0, height * 0.74, 0.55);
+    this.sway.add(glow);
+    this.externalGlow = glow;
+  }
+
+  /* Statisches Modell: Ganzkörper-Zucken und Glühen an die Stufe koppeln. */
+  syncExternalBody() {
+    if (!this.externalBody) return;
+    this.sway.rotation.y = this.twitch > 0 ? Math.sin(this.time * 32) * this.twitch * 0.16 : 0;
+    if (this.externalGlow) this.externalGlow.intensity = 0.5 + this.eyeGlow * 1.1;
+  }
+
   knockback(dist = 5) {
     const dir = new THREE.Vector3().subVectors(this.group.position, new THREE.Vector3()).setY(0);
     if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
@@ -632,6 +655,7 @@ export class Doll {
 
     const breathe = 1 + Math.sin(this.time * 1.1) * 0.008;
     this.torso.scale.y = breathe;
+    this.syncExternalBody();
   }
 
   /* Network-driven visuals for co-op guests: no AI, just pose. */
@@ -723,5 +747,6 @@ export class Doll {
 
     const breathe = 1 + Math.sin(this.time * 1.1) * 0.008;
     this.torso.scale.y = breathe;
+    this.syncExternalBody();
   }
 }

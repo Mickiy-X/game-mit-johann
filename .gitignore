@@ -5,3 +5,6 @@ Thumbs.db
 
 # Playtest/screenshot artifacts (not part of the build)
 /*.png
+
+# KI-Modelle: zu groß für GitHubs 100-MB-Limit (später Git LFS)
+assets/models/*.glb

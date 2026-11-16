@@ -257,6 +257,7 @@ export function buildWorld(scene) {
 
   const room = new THREE.Group();
   scene.add(room);
+  world.room = room;
 
   const wallCollider = (minX, maxX, minZ, maxZ) => {
     world.colliders.walls.push({ minX, maxX, minZ, maxZ });
@@ -727,16 +728,21 @@ export function buildWorld(scene) {
 
   /* ---------------- Wall dressing ---------------- */
   const warnSigns = [
-    ['KEIN AUSGANG', 'HINTER DIESER TÜR', 13.2, 6.2, -21.7, 0],
-    ['RUHE BEWAHREN', 'SIE HÖRT DEN LÄRM', -12.6, 6.2, -21.7, 0],
-    ['SCHICHT 3', 'NACHSCHICHT 22–06', -17.7, 5.3, -2, Math.PI / 2],
-    ['FADEN BRICHT', 'NIEMALS ZU VIEL ZIEHEN', 17.7, 5.3, 2, -Math.PI / 2],
-    ['SAFE ROOM', 'SCHLÜSSEL NICHT VERLIEREN', -17.7, 5.3, 18, Math.PI / 2]
+    ['KEIN AUSGANG', 'HINTER DIESER TÜR', 13.2, 6.2, -21.77, 0],
+    ['RUHE BEWAHREN', 'SIE HÖRT DEN LÄRM', -12.6, 6.2, -21.77, 0],
+    ['SCHICHT 3', 'NACHSCHICHT 22–06', -17.77, 5.3, -2, Math.PI / 2],
+    ['FADEN BRICHT', 'NIEMALS ZU VIEL ZIEHEN', 17.77, 5.3, 2, -Math.PI / 2],
+    ['WICKELSTUBE', 'FADEN AUFSPULEN', -17.77, 5.3, 18, Math.PI / 2]
   ];
   for (const [t, s, x, y, z, ry] of warnSigns) {
+    const backing = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.6, 0.06), M.metalDark);
+    backing.position.set(x, y, z);
+    backing.rotation.y = ry;
+    room.add(backing);
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.4), new THREE.MeshBasicMaterial({ map: signTexture(t, s) }));
     sign.position.set(x, y, z);
     sign.rotation.y = ry;
+    sign.translateZ(0.04);
     room.add(sign);
   }
 
@@ -986,11 +992,14 @@ export function buildWorld(scene) {
   hangingLamp(13.2, -11.2, 36);
   hangingLamp(12.8, -4.6, 34);
 
-  // emissive strip lights for side rooms
-  for (const [x, z, ry] of [[-17.2, -14, Math.PI / 2], [-17.2, -2, Math.PI / 2], [-17.2, 12, Math.PI / 2], [17.2, -14, -Math.PI / 2], [17.2, 0, -Math.PI / 2]]) {
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 2.6), M.emissive(0xbfe0ff, 0.85));
-    strip.position.set(x, 5.6, z);
-    strip.rotation.y = ry;
+  // emissive strip lights mounted flush on the side-room walls
+  for (const [x, z] of [[-17.72, -14], [-17.72, -2], [-17.72, 12], [17.72, -14], [17.72, 0]]) {
+    const inward = x < 0 ? 1 : -1;
+    const housing = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 2.75), M.metalDark);
+    housing.position.set(x, 5.6, z);
+    room.add(housing);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 2.55), M.emissive(0xbfe0ff, 0.85));
+    strip.position.set(x + inward * 0.075, 5.6, z);
     room.add(strip);
   }
 
@@ -1103,6 +1112,7 @@ export function buildWorld(scene) {
   };
 
   world.setWinderActive = (active) => { world.anim.winderActive = active; };
+  world.pulseSale = () => { world.anim.sellPulse = 1; };
 
   world.update = (dt, gameState) => {
     world.time += dt;
@@ -1161,6 +1171,19 @@ export function buildWorld(scene) {
       const active = world.anim.winderActive;
       world.anim.winderSpool.rotation.x += dt * (active ? 12 : 0.5);
       world.anim.winderLight.material.emissiveIntensity = active ? 2.4 : 0.5;
+    }
+
+    if (world.anim.sellPulse > 0) {
+      world.anim.sellPulse = Math.max(0, world.anim.sellPulse - dt / 0.9);
+      const s = world.anim.sellPulse;
+      if (world.anim.sellBasket) {
+        const bounce = Math.abs(Math.sin((1 - s) * Math.PI * 2.5)) * 0.1 * s;
+        world.anim.sellBasket.position.y = 1.11 + bounce;
+        world.anim.sellBasket.rotation.z = Math.sin((1 - s) * Math.PI * 5) * 0.14 * s;
+      }
+      if (world.anim.sellCashGlow) {
+        world.anim.sellCashGlow.material.emissiveIntensity = Math.max(0.4, 1.4 + Math.sin((1 - s) * Math.PI * 3) * 1.6 * s);
+      }
     }
 
     if (world.anim.spinnerWheel) {
@@ -1300,14 +1323,17 @@ function buildWinder(room, M, world, x, z, rotY = 0) {
     s.rotation.z = Math.PI / 2;
     g.add(s);
   }
-  // sign frame mounted on the work table
-  for (const dx of [-0.95, 0.95]) {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.5, 6), M.metalDark);
-    post.position.set(dx, 1.82, -0.5);
+  // sign frame standing on the work table, posts visible beside the machine
+  for (const dx of [-1.28, 1.28]) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.75, 6), M.metalDark);
+    post.position.set(dx, 1.99, -0.55);
     g.add(post);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.05, 8), M.metal);
+    foot.position.set(dx, 1.14, -0.55);
+    g.add(foot);
   }
   const wickSign = makeSignPlaque(M, 'WICKLER', 'FADEN AUFSPULEN', '#c79a2f', 1.9, 0.72);
-  wickSign.position.set(0, 2.4, -0.5);
+  wickSign.position.set(0, 2.5, -0.55);
   g.add(wickSign);
   room.add(g);
   const halfX = Math.abs(Math.sin(rotY)) > 0.7 ? 0.75 : 1.5;
@@ -1381,6 +1407,8 @@ function buildSellStation(room, M, world, x, z, rotY = 0) {
   basket.add(basketRim);
   g.add(basket);
   world.anim.sellBasket = basket;
+  world.anim.sellCashGlow = cashGlow;
+  world.anim.sellPulse = 0;
 
   // floor crate with stock
   const crate = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.62, 0.72), M.wood);

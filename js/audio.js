@@ -185,6 +185,15 @@ export class AudioEngine {
     this.noiseBurst(0.09, sprint ? 0.06 : 0.04, 'lowpass', 480, 0.7);
     this.tone(sprint ? 95 : 80, 45, 0.09, 0.025, 'sine');
   }
+  jump() {
+    this.noiseBurst(0.07, 0.03, 'highpass', 1150, 0.8);
+    this.tone(160, 320, 0.11, 0.022, 'sine');
+  }
+  land(impact = 1) {
+    const k = Math.max(0.3, Math.min(1, impact));
+    this.noiseBurst(0.15, 0.025 + 0.045 * k, 'lowpass', 300, 0.8);
+    this.tone(100, 42, 0.17, 0.02 + 0.03 * k, 'sine');
+  }
   coin() {
     this.tone(1046, 1046, 0.09, 0.05, 'sine');
     this.tone(1568, 1568, 0.16, 0.04, 'sine', 0.07);

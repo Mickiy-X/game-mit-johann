@@ -381,7 +381,10 @@
   <div id="loading">WEBSTUHL WIRD ANGEWORFEN …</div>
 
   <script type="importmap">
-    { "imports": { "three": "./vendor/three.module.js" } }
+    { "imports": {
+      "three": "./vendor/three.module.js",
+      "three/addons/": "./vendor/addons/"
+    } }
   </script>
   <script type="module" src="./js/main.js"></script>
 </body>
